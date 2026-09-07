@@ -2,9 +2,11 @@
 
 Give your [OpenClaw](https://openclaw.ai) agent its own email address.
 
-Inbound mail wakes the agent; its reply goes out in the same thread. The
-gateway holds the OpenMail websocket itself — no bridge process, no hook
-tokens, nothing to keep alive.
+Your agent gets an address like `sales@omail.sh`. Mail sent there reaches
+it as a conversation, so it can answer in-thread, open attachments, or just
+tell you what arrived and wait for instructions. Outbound works too, when you
+let it. The channel runs inside the OpenClaw gateway you already have, with
+one API key scoped to that single inbox.
 
 ## Install
 
