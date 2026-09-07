@@ -162,6 +162,91 @@ describe("dispatchOpenMailMessage notify mode", () => {
   });
 });
 
+describe("dispatchOpenMailMessage classification", () => {
+  const notify = () => ({ enqueueSystemEvent: vi.fn(() => true), requestHeartbeat: vi.fn() });
+
+  it("replies to personal mail in channel mode", async () => {
+    const { ctx, api, run } = harness({ ...apiMessage, category: "personal", autoReplyable: true, verdict: "clean" });
+    const notifyRuntime = notify();
+    await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
+    expect(run).toHaveBeenCalled();
+    expect(notifyRuntime.enqueueSystemEvent).not.toHaveBeenCalled();
+  });
+
+  it("hands automated mail to the agent without a reply turn", async () => {
+    const { ctx, api, run } = harness({
+      ...apiMessage,
+      fromAddr: "noreply@github.com",
+      category: "automated",
+      autoReplyable: false,
+      verdict: "clean",
+    });
+    const notifyRuntime = notify();
+    const out = await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
+    expect(out).toEqual({ kind: "dispatched" });
+    expect(run).not.toHaveBeenCalled();
+    expect(api.sendReply).not.toHaveBeenCalled();
+    const [text] = notifyRuntime.enqueueSystemEvent.mock.calls[0] as [string];
+    expect(text).toMatch(/New email arrived/);
+    expect(text).toContain("Category: automated");
+    expect(notifyRuntime.requestHeartbeat).toHaveBeenCalled();
+    expect(ctx.log?.info).toHaveBeenCalledWith(expect.stringMatching(/automated mail .* without a reply turn/));
+  });
+
+  it("treats marketing and bounces the same way", async () => {
+    for (const category of ["marketing", "bounce"] as const) {
+      const { ctx, api, run } = harness({ ...apiMessage, category, autoReplyable: false, verdict: "clean" });
+      const notifyRuntime = notify();
+      await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
+      expect(run).not.toHaveBeenCalled();
+      expect(notifyRuntime.enqueueSystemEvent).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("drops spam and malicious mail in every mode", async () => {
+    for (const mode of ["channel", "notify"] as const) {
+      for (const verdict of ["spam", "malicious"] as const) {
+        const { ctx, api, run } = harness({ ...apiMessage, category: verdict, autoReplyable: false, verdict }, { mode });
+        const notifyRuntime = notify();
+        const out = await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
+        expect(out).toMatchObject({ kind: "dropped", reason: expect.stringContaining(verdict) });
+        expect(run).not.toHaveBeenCalled();
+        expect(notifyRuntime.enqueueSystemEvent).not.toHaveBeenCalled();
+      }
+    }
+  });
+
+  it("keeps replying to unclassified messages", async () => {
+    const { ctx, api, run } = harness(apiMessage);
+    await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime: notify() });
+    expect(run).toHaveBeenCalled();
+  });
+
+  it("falls back to the frame's classification when the API copy has none", async () => {
+    const { ctx, api, run } = harness(apiMessage);
+    const notifyRuntime = notify();
+    await dispatchOpenMailMessage({
+      ctx,
+      event: { ...event, message: { ...event.message, category: "automated", auto_replyable: false, verdict: "clean" } },
+      api,
+      notifyRuntime,
+    });
+    expect(run).not.toHaveBeenCalled();
+    expect(notifyRuntime.enqueueSystemEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("prefers the API's classification over the frame's", async () => {
+    const { ctx, api, run } = harness({ ...apiMessage, category: "personal", autoReplyable: true, verdict: "clean" });
+    await dispatchOpenMailMessage({
+      ctx,
+      event: { ...event, message: { ...event.message, auto_replyable: false } },
+      api,
+      notifyRuntime: notify(),
+    });
+    expect(run).toHaveBeenCalled();
+  });
+});
+
 describe("dispatchOpenMailMessage pod scope", () => {
   const podAccount: Partial<ResolvedOpenMailAccount> = { scope: "pod", inboxId: null, podId: "pod_1" };
 

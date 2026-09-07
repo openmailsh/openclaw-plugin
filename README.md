@@ -150,6 +150,17 @@ inbox that *is* the agent (support@, sales@). `tool` fits "sign up for X and
 tell me the code" flows where the agent reads the inbox itself via the CLI.
 Re-authorization applies in every mode.
 
+### Only humans get an automatic reply
+
+OpenMail classifies every inbound mail server-side (`personal`, `automated`,
+`marketing`, `bounce`, `spam`, `malicious`). In `channel` mode the agent only
+opens a reply turn for `personal` mail. Anything else that is clean (a GitHub
+notification, a verification code, a newsletter, a bounce) is handed to the
+agent as information instead, exactly as `notify` mode would, so it knows the
+code arrived without emailing `noreply@` back. Spam and malicious mail is
+dropped in every mode with a log line. Messages the classifier has not seen
+(older than it) keep the plain `channel` behaviour.
+
 ## Behaviour
 
 - Each sender address is a separate conversation (like a WhatsApp contact), so

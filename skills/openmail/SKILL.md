@@ -9,8 +9,11 @@ metadata: {"openclaw":{"emoji":"📬","requires":{"bins":["openclaw"]}}}
 This agent has a real email address. How inbound mail reaches you depends on
 the channel's `mode`:
 
-- `channel` (default): each new mail starts a turn with the sender; your answer
-  is sent back as the email. No polling needed.
+- `channel` (default): each new mail from a person starts a turn with the
+  sender; your answer is sent back as the email. No polling needed. Automated
+  mail (notifications, verification codes, newsletters, bounces; marked
+  `Category:` in the header) arrives as a system event instead: tell the user,
+  do not reply to it.
 - `notify`: new mail is announced to you as a system event; relay it to the
   user, do not reply to the sender unless asked.
 - `tool`: nothing arrives on its own. Check the inbox with `threads list`

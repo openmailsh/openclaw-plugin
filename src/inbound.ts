@@ -7,7 +7,13 @@ import type { PluginRuntime } from "openclaw/plugin-sdk/plugin-runtime";
 import { buildAgentMainSessionKey } from "openclaw/plugin-sdk/routing";
 import { OPENMAIL_CHANNEL_ID, resolveInboxMode, type ResolvedOpenMailAccount } from "./accounts.js";
 import { stageInboundAttachments, type StagedMedia } from "./media.js";
-import { OpenMailApi, type OpenMailAttachment, type OpenMailMessage } from "./openmail-api.js";
+import {
+  OpenMailApi,
+  type OpenMailAttachment,
+  type OpenMailCategory,
+  type OpenMailMessage,
+  type OpenMailVerdict,
+} from "./openmail-api.js";
 import { getOpenMailRuntime } from "./runtime.js";
 
 /** Shape of `message.received` on the OpenMail websocket (mirrors the webhook payload). */
@@ -56,6 +62,42 @@ export function parseAddress(raw: string): { name?: string; address: string } {
 const PARSED_TEXT_PER_FILE = 8_000;
 const PARSED_TEXT_TOTAL = 24_000;
 
+export type Classification = {
+  category: OpenMailCategory | null;
+  /** null = unclassified (pre-classifier message); treated as replyable. */
+  autoReplyable: boolean | null;
+  verdict: OpenMailVerdict | null;
+};
+
+/**
+ * OpenMail classifies every inbound mail server-side (RFC headers, provider
+ * spam flags, Safe Browsing). The API copy is authoritative; the websocket
+ * frame is the fallback for the brief window before the row is readable.
+ */
+export function classify(
+  message: Pick<OpenMailMessage, "category" | "autoReplyable" | "verdict">,
+  event?: OpenMailMessageReceived["message"],
+): Classification {
+  return {
+    category: message.category ?? (event?.category as OpenMailCategory | undefined) ?? null,
+    autoReplyable: message.autoReplyable ?? event?.auto_replyable ?? null,
+    verdict: message.verdict ?? (event?.verdict as OpenMailVerdict | undefined) ?? null,
+  };
+}
+
+/** Spam and malicious mail never reaches the agent, in any mode. */
+export function isRejected(c: Classification): boolean {
+  return c.verdict === "spam" || c.verdict === "malicious";
+}
+
+/**
+ * Whether channel mode should answer. Only `autoReplyable === false` demotes:
+ * an unclassified message keeps today's behaviour.
+ */
+export function wantsReply(c: Classification): boolean {
+  return c.autoReplyable !== false;
+}
+
 export function buildAgentText(params: {
   from: string;
   to?: string | null;
@@ -68,6 +110,8 @@ export function buildAgentText(params: {
   mode?: "channel" | "notify";
   /** Shown in pod scope so the agent knows which inbox to answer from via the CLI. */
   inboxId?: string;
+  /** Server classification; surfaced so the agent knows a robot sent it. */
+  category?: OpenMailCategory | null;
 }): string {
   const header = [
     `From: ${params.from}`,
@@ -75,6 +119,7 @@ export function buildAgentText(params: {
     params.subject ? `Subject: ${params.subject}` : undefined,
     `Thread: ${params.threadId}`,
     params.inboxId ? `Inbox: ${params.inboxId}` : undefined,
+    params.category && params.category !== "personal" ? `Category: ${params.category}` : undefined,
   ].filter(Boolean) as string[];
 
   const sections: string[] = [];
@@ -182,6 +227,18 @@ export async function dispatchOpenMailMessage(params: {
     return { kind: "dropped", reason: `inbox ${inboxAddress ?? inboxId} is in tool mode` };
   }
 
+  const classification = classify(message, event.message);
+  if (isRejected(classification)) {
+    return {
+      kind: "dropped",
+      reason: `${classification.verdict} from ${sender.address} (category ${classification.category ?? "unknown"})`,
+    };
+  }
+  // Channel mode only answers mail a human could have sent. Automated,
+  // marketing and bounce mail (70% of inbound in prod) is handed to the agent
+  // as information instead, the same way notify mode delivers everything.
+  const reply = mode === "channel" && wantsReply(classification);
+
   // One conversation per correspondent. In pod scope, per (inbox, sender):
   // the same person writing to sales@ and support@ is two conversations.
   const peerId = account.scope === "pod" ? `${inboxId}/${sender.address}` : sender.address;
@@ -225,9 +282,10 @@ export async function dispatchOpenMailMessage(params: {
       staged,
       mode,
       inboxId: account.scope === "pod" ? inboxId : undefined,
+      category: classification.category,
     });
 
-  if (mode === "notify") {
+  if (!reply) {
     // Wake the agent in its main session; the heartbeat delivers wherever the
     // user last talked to it (WhatsApp, Telegram...). No reply goes to email.
     const system = params.notifyRuntime ?? getOpenMailRuntime().system;
@@ -244,6 +302,11 @@ export async function dispatchOpenMailMessage(params: {
       agentId: route.agentId,
       sessionKey,
     });
+    if (mode === "channel") {
+      ctx.log?.info?.(
+        `openmail: ${classification.category ?? "non-replyable"} mail from ${sender.address} handed to the agent without a reply turn`,
+      );
+    }
     return { kind: "dispatched" };
   }
 
@@ -299,6 +362,7 @@ export async function dispatchOpenMailMessage(params: {
             OpenMailThreadId: threadId,
             OpenMailMessageId: message.id,
             OpenMailSubject: subject ?? undefined,
+            OpenMailCategory: classification.category ?? undefined,
             MediaPath: staged.paths[0],
             MediaPaths: staged.paths.length > 0 ? staged.paths : undefined,
             MediaType: staged.types[0],

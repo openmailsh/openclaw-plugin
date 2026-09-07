@@ -37,7 +37,14 @@ export type OpenMailMessage = {
   bodyText?: string | null;
   attachments?: OpenMailAttachment[];
   createdAt?: string;
+  /** Server-side inbound classification; null on messages older than the classifier. */
+  category?: OpenMailCategory | null;
+  autoReplyable?: boolean | null;
+  verdict?: OpenMailVerdict | null;
 };
+
+export type OpenMailCategory = "personal" | "automated" | "marketing" | "bounce" | "spam" | "malicious";
+export type OpenMailVerdict = "clean" | "spam" | "malicious";
 
 export type SendResult = {
   id?: string;

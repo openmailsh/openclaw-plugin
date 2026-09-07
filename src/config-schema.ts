@@ -44,7 +44,7 @@ export const openmailChannelConfigSchema = buildChannelConfigSchema(
       baseUrl: { label: "API base URL", advanced: true },
       mode: {
         label: "Mode",
-        help: "channel (default): mail wakes the agent and it replies in-thread. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask.",
+            help: "channel (default): mail from people wakes the agent and it replies in-thread; automated mail is only announced. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask.",
       },
       inboxes: {
         label: "Per-inbox overrides",
