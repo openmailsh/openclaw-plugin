@@ -166,6 +166,41 @@
             "minimum": 0,
             "maximum": 100
           },
+          "inboxes": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "minLength": 1
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "channel",
+                    "notify",
+                    "tool"
+                  ]
+                },
+                "dmPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "allowlist",
+                    "disabled"
+                  ]
+                },
+                "allowFrom": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "additionalProperties": false
+            }
+          },
           "accounts": {
             "type": "object",
             "propertyNames": {
@@ -322,6 +357,41 @@
                   "type": "number",
                   "minimum": 0,
                   "maximum": 100
+                },
+                "inboxes": {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "type": "string",
+                        "enum": [
+                          "channel",
+                          "notify",
+                          "tool"
+                        ]
+                      },
+                      "dmPolicy": {
+                        "type": "string",
+                        "enum": [
+                          "open",
+                          "allowlist",
+                          "disabled"
+                        ]
+                      },
+                      "allowFrom": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "additionalProperties": false
+                  }
                 }
               },
               "additionalProperties": false
@@ -362,6 +432,11 @@
         "mode": {
           "label": "Mode",
           "help": "channel (default): mail wakes the agent and it replies in-thread. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask."
+        },
+        "inboxes": {
+          "label": "Per-inbox overrides",
+          "help": "Pod accounts only. Keyed by inbox address or id; each entry may set mode, allowFrom, dmPolicy for that inbox. Unset fields inherit from the account.",
+          "advanced": true
         },
         "mediaMaxMb": {
           "label": "Attachment budget (MB)",

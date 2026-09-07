@@ -22,6 +22,7 @@ const account: ResolvedOpenMailAccount = {
   allowFrom: ["ada@example.com"],
   mode: "channel",
   mediaMaxMb: 20,
+  inboxes: {},
 };
 
 const event: OpenMailMessageReceived = {
@@ -193,5 +194,53 @@ describe("dispatchOpenMailMessage pod scope", () => {
     await dispatchOpenMailMessage({ ctx, event: { ...event, inbox_id: "inb_7" }, api });
     const params = run.mock.calls[0][0] as { adapter: { ingest: (raw: unknown) => { textForAgent: string } } };
     expect(params.adapter.ingest(event).textForAgent).toContain("Inbox: inb_7");
+  });
+});
+
+describe("dispatchOpenMailMessage per-inbox overrides", () => {
+  const pod: Partial<ResolvedOpenMailAccount> = { scope: "pod", inboxId: null, podId: "pod_1" };
+
+  it("drops mail for an inbox set to tool mode, by id", async () => {
+    const { ctx, api, run } = harness(
+      { ...apiMessage, inboxId: "inb_7" },
+      { ...pod, inboxes: { inb_7: { mode: "tool" } } },
+    );
+    const out = await dispatchOpenMailMessage({ ctx, event: { ...event, inbox_id: "inb_7" }, api });
+    expect(out).toMatchObject({ kind: "dropped", reason: expect.stringMatching(/tool mode/) });
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("switches one inbox to notify, keyed by address, and leaves the rest in channel mode", async () => {
+    const inboxAddress = vi.fn(async (id: string) => (id === "inb_7" ? "Me@omail.sh" : "sales@omail.sh"));
+    const notifyRuntime = { enqueueSystemEvent: vi.fn(() => true), requestHeartbeat: vi.fn() };
+    const overrides = { ...pod, inboxes: { "me@omail.sh": { mode: "notify" as const } } };
+
+    const a = harness({ ...apiMessage, inboxId: "inb_7" }, overrides);
+    await dispatchOpenMailMessage({ ctx: a.ctx, event: { ...event, inbox_id: "inb_7" }, api: a.api, notifyRuntime, inboxAddress });
+    expect(notifyRuntime.enqueueSystemEvent).toHaveBeenCalledTimes(1);
+    expect(a.run).not.toHaveBeenCalled();
+
+    const b = harness({ ...apiMessage, inboxId: "inb_8" }, overrides);
+    await dispatchOpenMailMessage({ ctx: b.ctx, event: { ...event, inbox_id: "inb_8" }, api: b.api, notifyRuntime, inboxAddress });
+    expect(b.run).toHaveBeenCalledTimes(1);
+    expect(notifyRuntime.enqueueSystemEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it("applies a per-inbox allowFrom that replaces the account's", async () => {
+    // Account allows ada; this inbox only allows @corp.test, so ada is out here.
+    const { ctx, api, run } = harness(
+      { ...apiMessage, inboxId: "inb_7" },
+      { ...pod, inboxes: { inb_7: { allowFrom: ["@corp.test"] } } },
+    );
+    const out = await dispatchOpenMailMessage({ ctx, event: { ...event, inbox_id: "inb_7" }, api });
+    expect(out.kind).toBe("dropped");
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("does not look up addresses when overrides are keyed by id only", async () => {
+    const inboxAddress = vi.fn(async () => "x@omail.sh");
+    const { ctx, api } = harness({ ...apiMessage, inboxId: "inb_7" }, { ...pod, inboxes: { inb_9: { mode: "tool" } } });
+    await dispatchOpenMailMessage({ ctx, event: { ...event, inbox_id: "inb_7" }, api, inboxAddress });
+    expect(inboxAddress).not.toHaveBeenCalled();
   });
 });

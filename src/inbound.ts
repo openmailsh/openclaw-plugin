@@ -5,7 +5,12 @@ import type { ChannelIngressMonitorLifecycle } from "openclaw/plugin-sdk/channel
 import { bindIngressLifecycleToReplyOptions } from "openclaw/plugin-sdk/channel-outbound";
 import type { PluginRuntime } from "openclaw/plugin-sdk/plugin-runtime";
 import { buildAgentMainSessionKey } from "openclaw/plugin-sdk/routing";
-import { OPENMAIL_CHANNEL_ID, type ResolvedOpenMailAccount } from "./accounts.js";
+import {
+  OPENMAIL_CHANNEL_ID,
+  resolveInboxSettings,
+  type InboxSettings,
+  type ResolvedOpenMailAccount,
+} from "./accounts.js";
 import { stageInboundAttachments, type StagedMedia } from "./media.js";
 import { OpenMailApi, type OpenMailAttachment, type OpenMailMessage } from "./openmail-api.js";
 import { getOpenMailRuntime } from "./runtime.js";
@@ -52,7 +57,7 @@ export function parseAddress(raw: string): { name?: string; address: string } {
   return { address: raw.trim().toLowerCase() };
 }
 
-export function isSenderAllowed(account: ResolvedOpenMailAccount, address: string): boolean {
+export function isSenderAllowed(account: InboxSettings, address: string): boolean {
   // Who may email the inbox at all is OpenMail's job (allow/block rules in the
   // console or CLI). This is an optional local filter on top: with no
   // allowFrom the agent hears from everyone the inbox receives from — the
@@ -157,6 +162,8 @@ export async function dispatchOpenMailMessage(params: {
   api: OpenMailApi;
   lifecycle?: ChannelIngressMonitorLifecycle;
   notifyRuntime?: NotifyRuntime;
+  /** Pod scope: inbox id -> address, so `inboxes` overrides keyed by address apply. */
+  inboxAddress?: (inboxId: string) => Promise<string | undefined>;
 }): Promise<DispatchOutcome> {
   const { ctx, event, api } = params;
   const channelRuntime = ctx.channelRuntime as OpenMailChannelRuntime | undefined;
@@ -194,7 +201,15 @@ export async function dispatchOpenMailMessage(params: {
       `openmail: event claimed From ${claimed.address} but the API says ${sender.address}; using the API`,
     );
   }
-  if (!isSenderAllowed(account, sender.address)) {
+  // Per-inbox overrides (pod accounts). Only fetch the address when some
+  // override is keyed by one; ids are free.
+  const needsAddress = Object.keys(account.inboxes).some((k) => k.includes("@"));
+  const inboxAddress = needsAddress ? await params.inboxAddress?.(inboxId) : undefined;
+  const settings = resolveInboxSettings(account, { id: inboxId, address: inboxAddress });
+  if (settings.mode === "tool") {
+    return { kind: "dropped", reason: `inbox ${inboxAddress ?? inboxId} is in tool mode` };
+  }
+  if (!isSenderAllowed(settings, sender.address)) {
     return {
       kind: "dropped",
       reason: `${sender.address} is filtered out by channels.openmail.allowFrom / dmPolicy`,
@@ -246,7 +261,7 @@ export async function dispatchOpenMailMessage(params: {
       inboxId: account.scope === "pod" ? inboxId : undefined,
     });
 
-  if (account.mode === "notify") {
+  if (settings.mode === "notify") {
     // Wake the agent in its main session; the heartbeat delivers wherever the
     // user last talked to it (WhatsApp, Telegram...). No reply goes to email.
     const system = params.notifyRuntime ?? getOpenMailRuntime().system;

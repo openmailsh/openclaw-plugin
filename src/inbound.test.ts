@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ResolvedOpenMailAccount } from "./accounts.js";
+import { resolveInboxSettings, type ResolvedOpenMailAccount } from "./accounts.js";
 import { buildAgentText, isSenderAllowed, parseAddress } from "./inbound.js";
 
 function account(over: Partial<ResolvedOpenMailAccount> = {}): ResolvedOpenMailAccount {
@@ -17,6 +17,7 @@ function account(over: Partial<ResolvedOpenMailAccount> = {}): ResolvedOpenMailA
     allowFrom: [],
     mode: "channel",
     mediaMaxMb: 20,
+    inboxes: {},
     ...over,
   };
 }
@@ -115,5 +116,30 @@ describe("buildAgentText", () => {
     });
     expect(text).toContain("(extracted text, truncated)");
     expect(text.length).toBeLessThan(10_000);
+  });
+});
+
+describe("resolveInboxSettings", () => {
+  const acct = account({ mode: "channel", allowFrom: ["ada@example.com"], dmPolicy: undefined });
+
+  it("inherits everything without an override", () => {
+    expect(resolveInboxSettings(acct, { id: "inb_1", address: "a@omail.sh" })).toEqual({
+      mode: "channel",
+      dmPolicy: undefined,
+      allowFrom: ["ada@example.com"],
+    });
+  });
+
+  it("matches by id before address, and by lowercased address", () => {
+    const a = account({ ...acct, inboxes: { inb_1: { mode: "tool" }, "a@omail.sh": { mode: "notify" } } });
+    expect(resolveInboxSettings(a, { id: "inb_1", address: "A@omail.sh" }).mode).toBe("tool");
+    expect(resolveInboxSettings(a, { id: "inb_2", address: "A@omail.sh" }).mode).toBe("notify");
+  });
+
+  it("an override's allowFrom replaces the account's and resets dmPolicy unless given", () => {
+    const a = account({ ...acct, dmPolicy: "disabled", inboxes: { inb_1: { allowFrom: [] } } });
+    const s = resolveInboxSettings(a, { id: "inb_1" });
+    expect(s.allowFrom).toEqual([]);
+    expect(s.dmPolicy).toBeUndefined(); // -> open by default for this inbox
   });
 });

@@ -78,11 +78,24 @@ export async function startOpenMailGatewayAccount(
   let retries = 0;
   let stopError: unknown;
 
+  const addresses = new Map<string, string>();
+  const inboxAddress = async (inboxId: string) => {
+    const hit = addresses.get(inboxId);
+    if (hit) return hit;
+    try {
+      const inbox = await api.getInbox(inboxId);
+      addresses.set(inboxId, inbox.address);
+      return inbox.address;
+    } catch (error) {
+      ctx.log?.warn?.(`openmail: could not resolve inbox ${inboxId}: ${String(error)}`);
+      return undefined;
+    }
+  };
   const { ingress, cursor } = createIngress({
     ctx,
     dispatch: (event, lifecycle) => {
       ctx.setStatus({ ...ctx.getStatus(), accountId: ctx.accountId, lastInboundAt: Date.now() });
-      return dispatchOpenMailMessage({ ctx, event, api, lifecycle });
+      return dispatchOpenMailMessage({ ctx, event, api, lifecycle, inboxAddress });
     },
   });
   ctx.log?.info?.(`openmail: ingress mode ${ingress.mode}`);

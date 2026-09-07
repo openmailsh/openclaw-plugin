@@ -65,8 +65,24 @@ openclaw openmail --account outreach -- inbox create --mailbox-name outreach-3
 openclaw openmail --account outreach -- send --inbox-id <id> --thread-id <thr> --to … --body …
 ```
 
-New inboxes stream inbound mail within a minute (the gateway re-subscribes on
-a timer). Each `(inbox, sender)` pair is its own conversation, replies go out
+Inboxes in a pod share the account's `mode` and `allowFrom` unless you override
+them per inbox, keyed by address or id:
+
+```bash
+openclaw config set 'channels.openmail.accounts.outreach.inboxes["me@omail.sh"].mode' notify
+```
+
+```json5
+"inboxes": {
+  "support@omail.sh": { "mode": "channel" },
+  "me@omail.sh":      { "mode": "notify", "allowFrom": ["@mycompany.com"] },
+  "signups@omail.sh": { "mode": "tool" }          // inbound ignored; CLI only
+}
+```
+
+An override's `allowFrom` replaces the account's list for that inbox; unset
+fields inherit. New inboxes stream inbound mail within a minute (the gateway
+re-subscribes on a timer). Each `(inbox, sender)` pair is its own conversation, replies go out
 from the inbox that received the mail, and `--pod` accepts the pod id, its
 `clientId`, or its name. Trade-off: the stored key can read every inbox in the pod, not one.
 
@@ -165,7 +181,7 @@ Re-authorization and `allowFrom` apply in every mode.
     "openmail": {
       "apiKey": "om_…",          // inbox-scoped, or a SecretRef (below)
       "inboxId": "…",             // or "podId": "…" for a whole pod
-      "mode": "channel",         // default; or "notify" / "tool"
+      "mode": "channel",         // pod accounts: per-inbox via "inboxes": { "<addr|id>": { "mode": … } }         // default; or "notify" / "tool"
       "allowFrom": ["@yourcompany.com"],  // optional local filter; default: everyone
       "mediaMaxMb": 20,          // default
       "accounts": {

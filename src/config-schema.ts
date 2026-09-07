@@ -9,6 +9,14 @@ import { OPENMAIL_MODES } from "./accounts.js";
 // Literal string or SecretRef object; the host materialises refs before we read them.
 const SecretInputSchema = buildSecretInputSchema();
 
+const OpenMailInboxSchema = z
+  .object({
+    mode: z.enum(OPENMAIL_MODES).optional(),
+    dmPolicy: z.enum(["open", "allowlist", "disabled"]).optional(),
+    allowFrom: z.array(z.string()).optional(),
+  })
+  .strict();
+
 const OpenMailAccountSchema = z
   .object({
     name: z.string().optional(),
@@ -22,6 +30,7 @@ const OpenMailAccountSchema = z
     allowFrom: z.array(z.string()).optional(),
     mode: z.enum(OPENMAIL_MODES).optional(),
     mediaMaxMb: z.number().min(0).max(100).optional(),
+    inboxes: z.record(z.string().min(1), OpenMailInboxSchema).optional(),
   })
   .strict();
 
@@ -48,6 +57,11 @@ export const openmailChannelConfigSchema = buildChannelConfigSchema(
       mode: {
         label: "Mode",
         help: "channel (default): mail wakes the agent and it replies in-thread. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask.",
+      },
+      inboxes: {
+        label: "Per-inbox overrides",
+        help: "Pod accounts only. Keyed by inbox address or id; each entry may set mode, allowFrom, dmPolicy for that inbox. Unset fields inherit from the account.",
+        advanced: true,
       },
       mediaMaxMb: {
         label: "Attachment budget (MB)",
