@@ -92,7 +92,6 @@ const {
   omitKeys: ["defaultAccount"],
   implicitDefaultAccount: {
     channelKeys: ["apiKey", "inboxId", "podId"],
-    envVars: ["OPENMAIL_API_KEY", "OPENMAIL_INBOX_ID", "OPENMAIL_POD_ID"],
   },
 });
 
@@ -107,11 +106,12 @@ function channelConfig(cfg: OpenClawConfig): OpenMailAccountConfig | undefined {
  * Literal string, or a SecretRef the host has already materialised. A ref
  * that is still unresolved throws with the config path, which is what we want
  * at gateway start: a loud "secret not available" beats a silent 401.
+ * No env fallback: `{ source: "env", id: "..." }` is the supported way.
  */
-function resolveApiKey(value: unknown, fallback: string | undefined, path: string): string | null {
+function resolveApiKey(value: unknown, path: string): string | null {
   const present =
     value !== undefined && value !== null && !(typeof value === "string" && value.trim() === "");
-  return normalizeResolvedSecretInputString({ value: present ? value : fallback, path }) ?? null;
+  return present ? (normalizeResolvedSecretInputString({ value, path }) ?? null) : null;
 }
 
 export function resolveOpenMailAccount(params: {
@@ -124,25 +124,14 @@ export function resolveOpenMailAccount(params: {
   const channel = channelConfig(params.cfg);
   const merged = resolveMergedAccountConfig(params.cfg, accountId);
 
-  // Env fallbacks only apply to the default account, matching other channels.
   const isDefault = accountId === DEFAULT_ACCOUNT_ID;
   const apiKeyPath =
     isDefault && !channel?.accounts?.[accountId]
       ? "channels.openmail.apiKey"
       : `channels.openmail.accounts.${accountId}.apiKey`;
-  const apiKey = resolveApiKey(
-    merged.apiKey,
-    isDefault ? normalizeOptionalString(process.env.OPENMAIL_API_KEY) : undefined,
-    apiKeyPath,
-  );
-  const inboxId =
-    normalizeOptionalString(merged.inboxId) ??
-    (isDefault ? normalizeOptionalString(process.env.OPENMAIL_INBOX_ID) : undefined) ??
-    null;
-  const podId =
-    normalizeOptionalString(merged.podId) ??
-    (isDefault ? normalizeOptionalString(process.env.OPENMAIL_POD_ID) : undefined) ??
-    null;
+  const apiKey = resolveApiKey(merged.apiKey, apiKeyPath);
+  const inboxId = normalizeOptionalString(merged.inboxId) ?? null;
+  const podId = normalizeOptionalString(merged.podId) ?? null;
   // Named accounts inherit root fields, so a pod account under a root inbox
   // (or vice versa) sees both ids. The account's own entry decides; the
   // narrower inbox claim wins only when the account itself set neither.
@@ -151,11 +140,7 @@ export function resolveOpenMailAccount(params: {
   const ownPod = normalizeOptionalString(own.podId);
   const scope: OpenMailScope =
     ownInbox ? "inbox" : ownPod ? "pod" : inboxId ? "inbox" : podId ? "pod" : "inbox";
-  const baseUrl = (
-    normalizeOptionalString(merged.baseUrl) ??
-    normalizeOptionalString(process.env.OPENMAIL_BASE_URL) ??
-    DEFAULT_BASE_URL
-  ).replace(/\/+$/, "");
+  const baseUrl = (normalizeOptionalString(merged.baseUrl) ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
   const mediaMaxMb =
     typeof merged.mediaMaxMb === "number" && Number.isFinite(merged.mediaMaxMb) && merged.mediaMaxMb >= 0
       ? merged.mediaMaxMb
