@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@openmail/cli':
+        specifier: ^0.5.1
+        version: 0.5.1
       ws:
         specifier: ^8.18.0
         version: 8.21.3
@@ -468,6 +471,11 @@ packages:
     engines: {node: '>=22.19.0'}
     peerDependencies:
       undici: '>=8.5.0 <9'
+
+  '@openmail/cli@0.5.1':
+    resolution: {integrity: sha512-DU7JqFtCWOw6i27rhA87WXnHUWgD2vfqXUhqopKZoyPnsrh8GevvgpAkCW3j60YUknD1K8IrTDGBaxboQigsjA==}
+    engines: {node: '>=20'}
+    hasBin: true
 
   '@opentelemetry/semantic-conventions@1.43.0':
     resolution: {integrity: sha512-eSYWTm620tTk45EKSedaUL8MFYI8hW164hIXsgIHyxu3VobUB3fFCu5t0hQby6OoWRPsG1KkKUG2M5UadiLiVg==}
@@ -2445,6 +2453,14 @@ snapshots:
   '@openclaw/proxyline@0.3.7(undici@8.10.2)':
     dependencies:
       undici: 8.10.2
+
+  '@openmail/cli@0.5.1':
+    dependencies:
+      '@clack/prompts': 1.7.0
+      ws: 8.21.3
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   '@opentelemetry/semantic-conventions@1.43.0': {}
 

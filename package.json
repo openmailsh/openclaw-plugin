@@ -11,6 +11,7 @@
   "type": "module",
   "files": [
     "dist",
+    "skills",
     "openclaw.plugin.json",
     "README.md"
   ],
@@ -22,7 +23,8 @@
   },
   "dependencies": {
     "ws": "^8.18.0",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "@openmail/cli": "^0.5.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -111,6 +113,14 @@
             "cli": {
               "flags": "--keep-key",
               "description": "Store the given key as-is instead of minting an inbox-scoped key"
+            }
+          },
+          {
+            "key": "allowFrom",
+            "kind": "string-list",
+            "cli": {
+              "flags": "--allow-from <senders>",
+              "description": "Who may email the agent: addresses or domains, comma-separated. \"*\" opens it to everyone. Default: nobody."
             }
           },
           {

@@ -25,6 +25,7 @@ Get a key from [app.openmail.sh](https://app.openmail.sh) or with the
 | an account or pod key | picks your inbox (or **creates one if you have none**), mints an inbox-scoped key for it, stores only that. The broad key is never written to `openclaw.json`. |
 | `--mailbox-name sales` | creates `sales@omail.sh` (add `--display-name "Sales bot"` for the sender name) |
 | `--inbox-id <id>` | uses that existing inbox — needed when the key can see several |
+| `--allow-from a@x.com,x.com` | who may email the agent (addresses, domains, `*.x.com`, or `"*"` for anyone). Set server-side on the inbox and mirrored locally. **Default: nobody** — a fresh channel accepts no mail until you add a sender. |
 | `--keep-key` | store the given key unchanged, skip minting |
 
 The address to email is printed at the end. Re-running against an existing
@@ -42,6 +43,40 @@ openclaw channels status
 # - OpenMail support: enabled, configured, running, connected
 # - OpenMail sales:   enabled, configured, running, connected
 ```
+
+## Security defaults
+
+Email is the easiest prompt-injection surface an agent has, so the channel is
+closed until you open it:
+
+- **Default-deny senders.** `dmPolicy` defaults to `allowlist`; an empty
+  `allowFrom` accepts nobody. `open` only works with `"*"` in `allowFrom`.
+  The list is applied server-side (OpenMail correspondent policy) when the
+  key can set policy, and always enforced locally.
+- **Reply-only.** The agent can reply in the thread that woke it. It cannot
+  start a new thread or mail an arbitrary address unless you set
+  `allowNewThreads: true`. This also gates `openclaw message send --channel openmail`.
+- **Least-privilege key.** Only an inbox-scoped key is stored; it cannot list
+  other inboxes, mint keys, or change policy.
+- **No silent drops.** A failed agent turn is retried (2s, 10s, 30s), then the
+  event is released for server replay; the cursor is persisted so a gateway
+  restart replays mail that arrived while it was down.
+
+## The bundled CLI skill
+
+The plugin ships the OpenMail CLI and a skill that teaches the agent to use
+it through the channel's credentials:
+
+```bash
+openclaw openmail -- threads get --thread-id <id> --json
+openclaw openmail -- attachments text --message-id <id> --filename report.pdf
+openclaw openmail --account sales -- send --to a@b.com --thread-id <id> --body "..."
+```
+
+Credentials come from the channel config only; `--api-key`, `--base-url`,
+and `--state-path` are rejected, and proxy env vars are stripped. That is how
+the agent reads attachments (PDF, DOCX, XLSX, PPTX, images via OCR): the
+inbound notification names them and the skill says how to read them.
 
 ## Behaviour
 
@@ -83,9 +118,8 @@ fallbacks for the default account.
 ## Not yet
 
 - Notify mode (summarise to your chat channel instead of auto-replying).
-- Attachment contents for the agent (filenames only; use the CLI's
-  `openmail attachments text` from a skill).
 - OpenClaw pairing flow for unknown senders.
+- Secret refs (`apiKey: { source: "env", ... }`); plain strings only for now.
 - If the config write fails after a key was minted, the key is left behind.
   Harmless (10-key cap per inbox), visible in the dashboard.
 

@@ -12,8 +12,9 @@ const OpenMailAccountSchema = z
     apiKey: z.string().min(1).optional(),
     inboxId: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
-    dmPolicy: z.enum(["open", "allowlist", "pairing", "disabled"]).optional(),
+    dmPolicy: z.enum(["open", "allowlist", "disabled"]).optional(),
     allowFrom: z.array(z.string()).optional(),
+    allowNewThreads: z.boolean().optional(),
   })
   .strict();
 

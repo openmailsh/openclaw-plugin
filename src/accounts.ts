@@ -15,6 +15,8 @@ export type OpenMailAccountConfig = {
   baseUrl?: string;
   dmPolicy?: string;
   allowFrom?: string[];
+  /** Let the agent open new email threads (proactive sends). Default false: reply-only. */
+  allowNewThreads?: boolean;
   accounts?: Record<string, OpenMailAccountConfig>;
   defaultAccount?: string;
 };
@@ -29,6 +31,7 @@ export type ResolvedOpenMailAccount = {
   baseUrl: string;
   dmPolicy: string | undefined;
   allowFrom: string[];
+  allowNewThreads: boolean;
 };
 
 const {
@@ -87,5 +90,6 @@ export function resolveOpenMailAccount(params: {
     baseUrl,
     dmPolicy: normalizeOptionalString(merged.dmPolicy),
     allowFrom: Array.isArray(merged.allowFrom) ? merged.allowFrom.map(String) : [],
+    allowNewThreads: merged.allowNewThreads === true,
   };
 }

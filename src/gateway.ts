@@ -1,11 +1,14 @@
 // Gateway lifecycle: hold the OpenMail websocket for the account's lifetime,
 // reconnect with backoff, dedupe by event_id, hand each inbound mail to the
 // turn kernel. The gateway is already a daemon, so no separate bridge process.
+import fs from "node:fs/promises";
+import path from "node:path";
 import WebSocket from "ws";
 import type { ChannelGatewayContext } from "openclaw/plugin-sdk/channel-contract";
 import { waitUntilAbort } from "openclaw/plugin-sdk/channel-outbound";
 import { channelReadyPatch } from "openclaw/plugin-sdk/gateway-runtime";
 import { createChannelReplayGuard } from "openclaw/plugin-sdk/persistent-dedupe";
+import { resolveStateDir } from "openclaw/plugin-sdk/state-paths";
 import { OPENMAIL_CHANNEL_ID, type ResolvedOpenMailAccount } from "./accounts.js";
 import { dispatchOpenMailMessage, type OpenMailMessageReceived } from "./inbound.js";
 import { OpenMailApi } from "./openmail-api.js";
@@ -15,6 +18,8 @@ const FATAL_CLOSE_CODES = new Set([4001, 4003, 4008]);
 const MIN_STABLE_MS = 60_000;
 const MAX_BACKOFF_MS = 30_000;
 const PING_INTERVAL_MS = 30_000;
+// Local retries before we give an event back to the server for replay.
+const DISPATCH_RETRY_DELAYS_MS = [2_000, 10_000, 30_000];
 
 type ReplayEvent = { accountId: string; eventId: string };
 
@@ -74,8 +79,57 @@ export async function startOpenMailGatewayAccount(
 
   const signal = ctx.abortSignal;
   let retries = 0;
-  let lastEventId: string | undefined;
   let stopError: unknown;
+
+  // Last event we fully handled. Sent as `last_event_id` on (re)connect so the
+  // server replays anything after it; persisted so a gateway restart replays
+  // what arrived while we were down instead of silently dropping it.
+  const cursor = createCursorStore(ctx.accountId);
+  let lastEventId = await cursor.load();
+
+  /**
+   * Hand one event to the agent. A failure is retried locally with backoff;
+   * if it still fails we release the dedupe claim and leave the cursor where
+   * it was, so the next reconnect gets the event again from the server.
+   */
+  const handleEvent = async (event: OpenMailMessageReceived) => {
+    let attempt = 0;
+    for (;;) {
+      const result = await replayGuard.processGuarded(
+        { accountId: ctx.accountId, eventId: event.event_id },
+        async () => {
+          ctx.setStatus({ ...ctx.getStatus(), accountId: ctx.accountId, lastInboundAt: Date.now() });
+          await dispatchOpenMailMessage({ ctx, event, api });
+        },
+        { onError: "release" },
+      ).then(
+        (r) => ({ ok: true as const, r }),
+        (error: unknown) => ({ ok: false as const, error }),
+      );
+
+      if (result.ok) {
+        if (result.r.kind === "duplicate") {
+          ctx.log?.info?.(`openmail: skip duplicate event ${event.event_id}`);
+        }
+        lastEventId = event.event_id;
+        await cursor.save(event.event_id);
+        return;
+      }
+
+      const delay = DISPATCH_RETRY_DELAYS_MS[attempt];
+      if (delay === undefined || signal?.aborted) {
+        ctx.log?.error?.(
+          `openmail: giving up on event ${event.event_id} after ${attempt} retries; it will be replayed on reconnect: ${String(result.error)}`,
+        );
+        return;
+      }
+      attempt += 1;
+      ctx.log?.warn?.(
+        `openmail: dispatch of ${event.event_id} failed, retry ${attempt} in ${delay}ms: ${String(result.error)}`,
+      );
+      await sleep(delay, signal);
+    }
+  };
 
   try {
     while (!signal?.aborted) {
@@ -96,22 +150,7 @@ export async function startOpenMailGatewayAccount(
           apiKey: account.apiKey,
           inboxId: account.inboxId,
           lastEventId: () => lastEventId,
-          onEvent: async (event) => {
-            const result = await replayGuard.processGuarded(
-              { accountId: ctx.accountId, eventId: event.event_id },
-              async () => {
-                ctx.setStatus({ ...ctx.getStatus(), accountId: ctx.accountId, lastInboundAt: Date.now() });
-                await dispatchOpenMailMessage({ ctx, event, api });
-              },
-              // A failed dispatch should not be retried on the next replay; the
-              // mail is still in the inbox and the agent can read it via the CLI.
-              { onError: "commit" },
-            );
-            if (result.kind === "duplicate") {
-              ctx.log?.info?.(`openmail: skip duplicate event ${event.event_id}`);
-            }
-            lastEventId = event.event_id;
-          },
+          onEvent: handleEvent,
         });
       } catch (err) {
         ctx.log?.warn?.(`openmail: websocket error: ${String(err)}`);
@@ -134,6 +173,33 @@ export async function startOpenMailGatewayAccount(
       ...(stopError ? { lastError: String(stopError) } : {}),
     });
   }
+}
+
+/** Tiny per-account file: `{ lastEventId }` under the OpenClaw state dir. */
+function createCursorStore(accountId: string) {
+  const file = path.join(
+    resolveStateDir(),
+    "openmail",
+    `cursor-${accountId.replace(/[^A-Za-z0-9_-]/g, "_")}.json`,
+  );
+  return {
+    async load(): Promise<string | undefined> {
+      try {
+        const raw = JSON.parse(await fs.readFile(file, "utf8")) as { lastEventId?: unknown };
+        return typeof raw.lastEventId === "string" ? raw.lastEventId : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    async save(lastEventId: string): Promise<void> {
+      try {
+        await fs.mkdir(path.dirname(file), { recursive: true });
+        await fs.writeFile(file, JSON.stringify({ lastEventId }), "utf8");
+      } catch {
+        // Best effort; losing the cursor only costs replay after a restart.
+      }
+    },
+  };
 }
 
 /** Resolves when the socket closes. Returns a reason string for fatal closes. */
@@ -164,7 +230,9 @@ function connectOnce(params: {
       ctx.abortSignal?.removeEventListener("abort", onAbort);
       ws.removeAllListeners();
       try {
-        ws.close();
+        // close() on a still-connecting socket throws; terminate() does not.
+        if (ws.readyState === WebSocket.CONNECTING) ws.terminate();
+        else ws.close();
       } catch {
         // already closed
       }

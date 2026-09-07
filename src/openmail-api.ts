@@ -83,6 +83,41 @@ export class OpenMailApi {
   }
 
   /**
+   * Server-side gate: only these senders may email the inbox; everyone else
+   * is rejected before the event ever reaches the gateway. An empty list
+   * denies all (fail closed).
+   *
+   *  "applied"   rules written as given
+   *  "inherited" a pod key may not add allow rules on top of a parent
+   *              allowlist, so only the mode was set; the parent's rules apply
+   *  "forbidden" inbox-scoped keys cannot set policy at all
+   */
+  async setInboundAllowlist(
+    inboxId: string,
+    allowFrom: string[],
+  ): Promise<"applied" | "inherited" | "forbidden"> {
+    const open = allowFrom.includes("*");
+    const put = (rules: { type: "allow"; value: string }[]) =>
+      this.request("PUT", `/v1/policy?inboxId=${encodeURIComponent(inboxId)}`, {
+        inbound: open ? { mode: "none", rules: [] } : { mode: "allowlist", rules },
+      });
+    try {
+      await put(allowFrom.map((value) => ({ type: "allow", value })));
+      return "applied";
+    } catch (err) {
+      if (!(err instanceof OpenMailApiError) || err.status !== 403) throw err;
+      if (open || allowFrom.length === 0) return "forbidden";
+      try {
+        await put([]);
+        return "inherited";
+      } catch (retryErr) {
+        if (retryErr instanceof OpenMailApiError && retryErr.status === 403) return "forbidden";
+        throw retryErr;
+      }
+    }
+  }
+
+  /**
    * Which inbox does this key drive? An inbox-scoped key answers by itself;
    * a broader key works when it sees exactly one inbox, or none (we create
    * one). Several inboxes is ambiguous and the caller must pick.

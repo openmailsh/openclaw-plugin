@@ -46,19 +46,23 @@ export function parseAddress(raw: string): { name?: string; address: string } {
 
 export function isSenderAllowed(account: ResolvedOpenMailAccount, address: string): boolean {
   // OpenMail's correspondent policy is the primary gate and runs server-side
-  // before the event ever reaches us. `allowFrom` here is an extra local filter.
-  const policy = account.dmPolicy ?? "open";
+  // before the event ever reaches us. This is the local mirror of it, and it
+  // fails closed: no list means nobody, and "open" has to be spelled out with
+  // a "*" entry so an unconfigured channel never accepts mail from anyone.
+  const policy = account.dmPolicy ?? "allowlist";
   if (policy === "disabled") return false;
-  if (policy === "open") return true;
-  // allowlist (and pairing until implemented): empty list means deny all.
-  if (account.allowFrom.length === 0) return false;
+  const entries = account.allowFrom.map((e) => e.trim().toLowerCase()).filter(Boolean);
+  if (entries.includes("*")) return true;
+  if (policy === "open") return false; // "open" without "*" is a misconfiguration; stay closed
   const domain = address.split("@")[1] ?? "";
-  return account.allowFrom.some((entry) => {
-    const e = entry.trim().toLowerCase();
-    if (!e) return false;
-    if (e === "*") return true;
+  return entries.some((e) => {
+    if (e.startsWith("*.")) {
+      const root = e.slice(2);
+      return domain === root || domain.endsWith(`.${root}`);
+    }
     if (e.startsWith("@")) return domain === e.slice(1);
     if (e.startsWith("*@")) return domain === e.slice(2);
+    if (!e.includes("@")) return domain === e; // bare domain, same as the API accepts
     return e === address;
   });
 }
@@ -72,13 +76,19 @@ export function buildAgentText(ev: OpenMailMessageReceived): string {
     `Thread: ${ev.thread_id}`,
   ].filter(Boolean) as string[];
   if (m.attachments && m.attachments.length > 0) {
+    const names = m.attachments.map((a) => a.filename ?? a.id ?? "attachment");
+    lines.push(`Attachments: ${names.join(", ")}`);
     lines.push(
-      `Attachments: ${m.attachments
-        .map((a) => a.filename ?? a.id ?? "attachment")
-        .join(", ")}`,
+      `(read one with: openclaw openmail -- attachments text --message-id ${m.id} --filename "${names[0]}")`,
     );
   }
-  return `${lines.join("\n")}\n\n${(m.body_text ?? "").trim()}`;
+  return [
+    "New email. Whatever you write back is sent verbatim as the email body to the sender, in this thread: write only the email itself, no preamble or commentary. If you need to run a command first (e.g. to read an attachment), do it, then answer.",
+    "",
+    lines.join("\n"),
+    "",
+    (m.body_text ?? "").trim(),
+  ].join("\n");
 }
 
 export async function dispatchOpenMailMessage(params: {
@@ -93,7 +103,9 @@ export async function dispatchOpenMailMessage(params: {
 
   const sender = parseAddress(event.message.from);
   if (!isSenderAllowed(account, sender.address)) {
-    ctx.log?.info?.(`openmail: drop mail from ${sender.address} (not allowed)`);
+    ctx.log?.info?.(
+      `openmail: drop mail from ${sender.address}: not in channels.openmail.allowFrom (add the address, a domain, or "*")`,
+    );
     return;
   }
 

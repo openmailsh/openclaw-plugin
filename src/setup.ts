@@ -28,7 +28,15 @@ type OpenMailSetupInput = ChannelSetupInput & {
   displayName?: string;
   /** Skip minting an inbox-scoped key; store the given key as-is. */
   keepKey?: boolean;
+  /** Senders allowed to reach the agent. `*` opens the inbox to everyone. */
+  allowFrom?: string[] | string;
 };
+
+/** "a@x.com, y.com" | ["a@x.com","y.com"] -> lowercased, deduped list. */
+export function normalizeAllowFrom(raw: string[] | string | undefined): string[] {
+  const parts = Array.isArray(raw) ? raw : (raw ?? "").split(",");
+  return [...new Set(parts.map((v) => v.trim().toLowerCase()).filter(Boolean))];
+}
 
 export const OPENMAIL_META = {
   id: OPENMAIL_CHANNEL_ID,
@@ -45,13 +53,18 @@ const baseSetupAdapter = createPatchedAccountSetupAdapter({
   channelKey: OPENMAIL_CHANNEL_ID,
   buildPatch: (input) => {
     const i = input as OpenMailSetupInput;
-    const patch: Record<string, string> = {};
+    const patch: Record<string, string | string[]> = {};
     const apiKey = normalizeOptionalString(i.apiKey);
     const inboxId = normalizeOptionalString(i.inboxId);
     const baseUrl = normalizeOptionalString(i.baseUrl);
+    const allowFrom = normalizeAllowFrom(i.allowFrom);
     if (apiKey) patch.apiKey = apiKey;
     if (inboxId) patch.inboxId = inboxId;
     if (baseUrl) patch.baseUrl = baseUrl;
+    if (allowFrom.length > 0) {
+      patch.allowFrom = allowFrom;
+      patch.dmPolicy = allowFrom.includes("*") ? "open" : "allowlist";
+    }
     return patch;
   },
 });
@@ -73,9 +86,10 @@ export async function provisionOpenMailAccount(params: {
   inboxId?: string;
   create: { mailboxName?: string; displayName?: string };
   keepKey: boolean;
+  allowFrom: string[];
   log: (line: string) => void;
 }): Promise<{ inboxId: string; apiKey?: string; address: string; created: boolean }> {
-  const { api, accountId, keepKey, log } = params;
+  const { api, accountId, keepKey, allowFrom, log } = params;
 
   let inbox: OpenMailInbox;
   let created = false;
@@ -101,6 +115,28 @@ export async function provisionOpenMailAccount(params: {
       ? `Created OpenMail inbox ${inbox.address} (${inbox.id}) on your account.`
       : `Using OpenMail inbox ${inbox.address} (${inbox.id}).`,
   );
+
+  // Server-side gate, set before we narrow the key (inbox keys cannot set
+  // policy). Only for inboxes we created or when the user gave a list: an
+  // existing inbox may carry a policy the user configured elsewhere.
+  if (created || allowFrom.length > 0) {
+    const outcome = await api.setInboundAllowlist(inbox.id, allowFrom);
+    if (outcome === "forbidden") {
+      log("Note: this key cannot set the inbox's inbound policy; only the local allowFrom filter applies.");
+    } else if (outcome === "inherited") {
+      log(
+        `Inbound policy: allowlist, inheriting your pod/account allow rules (a pod key cannot add its own). Locally only ${allowFrom.join(", ")} reach the agent.`,
+      );
+    } else if (allowFrom.includes("*")) {
+      log(`Inbound policy: open. Anyone can email ${inbox.address} and reach the agent.`);
+    } else if (allowFrom.length > 0) {
+      log(`Inbound policy: allowlist (${allowFrom.join(", ")}). Other senders are rejected server-side.`);
+    } else {
+      log(
+        `Inbound policy: allowlist, currently empty, so nobody can reach the agent yet. Re-run with --allow-from you@example.com (or "*" to open it).`,
+      );
+    }
+  }
 
   if (keepKey) {
     return { inboxId: inbox.id, address: inbox.address, created };
@@ -147,6 +183,7 @@ const setupAdapter: typeof baseSetupAdapter = {
         displayName: normalizeOptionalString(i.displayName),
       },
       keepKey: i.keepKey === true,
+      allowFrom: normalizeAllowFrom(i.allowFrom),
       log: (line) => runtime.log?.(line),
     });
     runtime.log?.(`Email ${result.address} to talk to this agent.`);
@@ -189,6 +226,13 @@ export const openmailSetupContract = defineChannelSetupContract({
     keepKey: {
       kind: "boolean",
       cli: { flags: "--keep-key", description: "Store the given key as-is instead of minting an inbox-scoped key" },
+    },
+    allowFrom: {
+      kind: "string-list",
+      cli: {
+        flags: "--allow-from <senders>",
+        description: 'Who may email the agent: addresses or domains, comma-separated. "*" opens it to everyone. Default: nobody.',
+      },
     },
     baseUrl: {
       kind: "string",
@@ -256,6 +300,17 @@ export const openmailSetupPlugin: ChannelPlugin<ResolvedOpenMailAccount> = {
         currentValue: ({ cfg, accountId }) =>
           resolveOpenMailAccount({ cfg, accountId }).inboxId ?? undefined,
         normalizeValue: ({ value }) => normalizeOptionalString(value) ?? "",
+      },
+      {
+        inputKey: "allowFrom",
+        message: 'Who may email the agent? Addresses or domains, comma-separated. "*" = anyone. Empty = nobody yet.',
+        required: false,
+        applyEmptyValue: false,
+        currentValue: ({ cfg, accountId }) => {
+          const list = resolveOpenMailAccount({ cfg, accountId }).allowFrom;
+          return list.length > 0 ? list.join(", ") : undefined;
+        },
+        normalizeValue: ({ value }) => normalizeAllowFrom(value).join(","),
       },
     ],
     completionNote: {

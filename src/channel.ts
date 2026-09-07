@@ -24,7 +24,7 @@ type OpenMailProbe =
   | { ok: false; address: null; error: string };
 
 function stripPrefix(to: string): string {
-  return to.replace(/^openmail:/i, "").trim();
+  return to.replace(/^(openmail|email|mail):/i, "").trim();
 }
 
 export const openmailPlugin: ChannelPlugin<ResolvedOpenMailAccount, OpenMailProbe> =
@@ -95,6 +95,20 @@ export const openmailPlugin: ChannelPlugin<ResolvedOpenMailAccount, OpenMailProb
       gateway: {
         startAccount: async (ctx) => await startOpenMailGatewayAccount(ctx),
       },
+      messaging: {
+        targetPrefixes: ["openmail", "email", "mail"],
+        targetIdComparison: "lowercase",
+        // A target is an email address, optionally prefixed.
+        normalizeTarget: (raw) => {
+          const address = stripPrefix(raw).toLowerCase();
+          return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address) ? address : undefined;
+        },
+        inferTargetChatType: () => "direct",
+        targetResolver: {
+          looksLikeId: (raw) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(stripPrefix(raw)),
+          hint: "an email address, e.g. person@example.com",
+        },
+      },
     },
     // Proactive sends (agent-initiated, cron, `openclaw message send`). In-thread
     // replies to inbound mail go through the turn's delivery adapter instead.
@@ -113,6 +127,14 @@ export const openmailPlugin: ChannelPlugin<ResolvedOpenMailAccount, OpenMailProb
           const api = new OpenMailApi(account.baseUrl, account.apiKey);
           const address = stripPrefix(to);
           const thread = threadId ? String(threadId) : undefined;
+          if (!thread && !account.allowNewThreads) {
+            // Reply-only by default: an injected "forward this to x@y" cannot
+            // become a fresh email to an arbitrary address. Replies stay bound
+            // to the thread that triggered them.
+            throw new Error(
+              `OpenMail channel is reply-only: cannot start a new thread to ${address}. Set channels.openmail.allowNewThreads: true to enable proactive email.`,
+            );
+          }
           const result = thread
             ? await api.sendReply({ inboxId: account.inboxId, to: address, threadId: thread, body: text })
             : await api.sendNew({
