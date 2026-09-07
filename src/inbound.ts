@@ -5,12 +5,7 @@ import type { ChannelIngressMonitorLifecycle } from "openclaw/plugin-sdk/channel
 import { bindIngressLifecycleToReplyOptions } from "openclaw/plugin-sdk/channel-outbound";
 import type { PluginRuntime } from "openclaw/plugin-sdk/plugin-runtime";
 import { buildAgentMainSessionKey } from "openclaw/plugin-sdk/routing";
-import {
-  OPENMAIL_CHANNEL_ID,
-  resolveInboxSettings,
-  type InboxSettings,
-  type ResolvedOpenMailAccount,
-} from "./accounts.js";
+import { OPENMAIL_CHANNEL_ID, resolveInboxMode, type ResolvedOpenMailAccount } from "./accounts.js";
 import { stageInboundAttachments, type StagedMedia } from "./media.js";
 import { OpenMailApi, type OpenMailAttachment, type OpenMailMessage } from "./openmail-api.js";
 import { getOpenMailRuntime } from "./runtime.js";
@@ -55,29 +50,6 @@ export function parseAddress(raw: string): { name?: string; address: string } {
     return { name: name || undefined, address: m[2].trim().toLowerCase() };
   }
   return { address: raw.trim().toLowerCase() };
-}
-
-export function isSenderAllowed(account: InboxSettings, address: string): boolean {
-  // Who may email the inbox at all is OpenMail's job (allow/block rules in the
-  // console or CLI). This is an optional local filter on top: with no
-  // allowFrom the agent hears from everyone the inbox receives from — the
-  // agent needs to get the Instagram signup mail, not just mail from you.
-  const entries = account.allowFrom.map((e) => e.trim().toLowerCase()).filter(Boolean);
-  const policy = account.dmPolicy ?? (entries.length > 0 ? "allowlist" : "open");
-  if (policy === "disabled") return false;
-  if (policy === "open" || entries.includes("*")) return true;
-  if (entries.length === 0) return false; // explicit allowlist with nobody on it
-  const domain = address.split("@")[1] ?? "";
-  return entries.some((e) => {
-    if (e.startsWith("*.")) {
-      const root = e.slice(2);
-      return domain === root || domain.endsWith(`.${root}`);
-    }
-    if (e.startsWith("@")) return domain === e.slice(1);
-    if (e.startsWith("*@")) return domain === e.slice(2);
-    if (!e.includes("@")) return domain === e; // bare domain, same as the API accepts
-    return e === address;
-  });
 }
 
 /** Per-attachment and total caps on inlined extracted text. */
@@ -205,15 +177,9 @@ export async function dispatchOpenMailMessage(params: {
   // override is keyed by one; ids are free.
   const needsAddress = Object.keys(account.inboxes).some((k) => k.includes("@"));
   const inboxAddress = needsAddress ? await params.inboxAddress?.(inboxId) : undefined;
-  const settings = resolveInboxSettings(account, { id: inboxId, address: inboxAddress });
-  if (settings.mode === "tool") {
+  const mode = resolveInboxMode(account, { id: inboxId, address: inboxAddress });
+  if (mode === "tool") {
     return { kind: "dropped", reason: `inbox ${inboxAddress ?? inboxId} is in tool mode` };
-  }
-  if (!isSenderAllowed(settings, sender.address)) {
-    return {
-      kind: "dropped",
-      reason: `${sender.address} is filtered out by channels.openmail.allowFrom / dmPolicy`,
-    };
   }
 
   // One conversation per correspondent. In pod scope, per (inbox, sender):
@@ -261,7 +227,7 @@ export async function dispatchOpenMailMessage(params: {
       inboxId: account.scope === "pod" ? inboxId : undefined,
     });
 
-  if (settings.mode === "notify") {
+  if (mode === "notify") {
     // Wake the agent in its main session; the heartbeat delivers wherever the
     // user last talked to it (WhatsApp, Telegram...). No reply goes to email.
     const system = params.notifyRuntime ?? getOpenMailRuntime().system;

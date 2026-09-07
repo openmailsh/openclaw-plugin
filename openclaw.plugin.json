@@ -139,20 +139,6 @@
             "type": "string",
             "format": "uri"
           },
-          "dmPolicy": {
-            "type": "string",
-            "enum": [
-              "open",
-              "allowlist",
-              "disabled"
-            ]
-          },
-          "allowFrom": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
           "mode": {
             "type": "string",
             "enum": [
@@ -182,20 +168,6 @@
                     "notify",
                     "tool"
                   ]
-                },
-                "dmPolicy": {
-                  "type": "string",
-                  "enum": [
-                    "open",
-                    "allowlist",
-                    "disabled"
-                  ]
-                },
-                "allowFrom": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
                 }
               },
               "additionalProperties": false
@@ -331,20 +303,6 @@
                   "type": "string",
                   "format": "uri"
                 },
-                "dmPolicy": {
-                  "type": "string",
-                  "enum": [
-                    "open",
-                    "allowlist",
-                    "disabled"
-                  ]
-                },
-                "allowFrom": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                },
                 "mode": {
                   "type": "string",
                   "enum": [
@@ -374,20 +332,6 @@
                           "notify",
                           "tool"
                         ]
-                      },
-                      "dmPolicy": {
-                        "type": "string",
-                        "enum": [
-                          "open",
-                          "allowlist",
-                          "disabled"
-                        ]
-                      },
-                      "allowFrom": {
-                        "type": "array",
-                        "items": {
-                          "type": "string"
-                        }
                       }
                     },
                     "additionalProperties": false
@@ -421,21 +365,13 @@
           "label": "API base URL",
           "advanced": true
         },
-        "allowFrom": {
-          "label": "Sender filter",
-          "help": "Optional. Only these addresses or domains reach the agent. Empty = everyone the inbox receives from. Server-side allow/block rules live in the OpenMail console or CLI."
-        },
-        "dmPolicy": {
-          "label": "Sender policy",
-          "help": "open (default): everyone. allowlist: only allowFrom. disabled: nobody."
-        },
         "mode": {
           "label": "Mode",
           "help": "channel (default): mail wakes the agent and it replies in-thread. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask."
         },
         "inboxes": {
           "label": "Per-inbox overrides",
-          "help": "Pod accounts only. Keyed by inbox address or id; each entry may set mode, allowFrom, dmPolicy for that inbox. Unset fields inherit from the account.",
+          "help": "Pod accounts only. Keyed by inbox address or id; each entry may set the mode for that inbox; otherwise it inherits the account's.",
           "advanced": true
         },
         "mediaMaxMb": {

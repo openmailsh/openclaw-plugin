@@ -122,14 +122,6 @@
             "key": "mode"
           },
           {
-            "kind": "string-list",
-            "cli": {
-              "flags": "--allow-from <senders>",
-              "description": "Optional local filter: only these senders (addresses or domains, comma-separated) reach the agent. Default: everyone."
-            },
-            "key": "allowFrom"
-          },
-          {
             "kind": "string",
             "cli": {
               "flags": "--base-url <url>",

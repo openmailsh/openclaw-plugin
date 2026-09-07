@@ -12,8 +12,6 @@ const SecretInputSchema = buildSecretInputSchema();
 const OpenMailInboxSchema = z
   .object({
     mode: z.enum(OPENMAIL_MODES).optional(),
-    dmPolicy: z.enum(["open", "allowlist", "disabled"]).optional(),
-    allowFrom: z.array(z.string()).optional(),
   })
   .strict();
 
@@ -26,8 +24,6 @@ const OpenMailAccountSchema = z
     inboxId: z.string().min(1).optional(),
     podId: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
-    dmPolicy: z.enum(["open", "allowlist", "disabled"]).optional(),
-    allowFrom: z.array(z.string()).optional(),
     mode: z.enum(OPENMAIL_MODES).optional(),
     mediaMaxMb: z.number().min(0).max(100).optional(),
     inboxes: z.record(z.string().min(1), OpenMailInboxSchema).optional(),
@@ -46,21 +42,13 @@ export const openmailChannelConfigSchema = buildChannelConfigSchema(
         advanced: true,
       },
       baseUrl: { label: "API base URL", advanced: true },
-      allowFrom: {
-        label: "Sender filter",
-        help: "Optional. Only these addresses or domains reach the agent. Empty = everyone the inbox receives from. Server-side allow/block rules live in the OpenMail console or CLI.",
-      },
-      dmPolicy: {
-        label: "Sender policy",
-        help: "open (default): everyone. allowlist: only allowFrom. disabled: nobody.",
-      },
       mode: {
         label: "Mode",
         help: "channel (default): mail wakes the agent and it replies in-thread. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask.",
       },
       inboxes: {
         label: "Per-inbox overrides",
-        help: "Pod accounts only. Keyed by inbox address or id; each entry may set mode, allowFrom, dmPolicy for that inbox. Unset fields inherit from the account.",
+        help: "Pod accounts only. Keyed by inbox address or id; each entry may set the mode for that inbox; otherwise it inherits the account's.",
         advanced: true,
       },
       mediaMaxMb: {

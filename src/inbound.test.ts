@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { resolveInboxSettings, type ResolvedOpenMailAccount } from "./accounts.js";
-import { buildAgentText, isSenderAllowed, parseAddress } from "./inbound.js";
+import { resolveInboxMode, type ResolvedOpenMailAccount } from "./accounts.js";
+import { buildAgentText, parseAddress } from "./inbound.js";
 
 function account(over: Partial<ResolvedOpenMailAccount> = {}): ResolvedOpenMailAccount {
   return {
@@ -13,58 +13,12 @@ function account(over: Partial<ResolvedOpenMailAccount> = {}): ResolvedOpenMailA
     inboxId: "i",
     podId: null,
     baseUrl: "https://api.openmail.sh",
-    dmPolicy: undefined,
-    allowFrom: [],
     mode: "channel",
     mediaMaxMb: 20,
     inboxes: {},
     ...over,
   };
 }
-
-describe("isSenderAllowed", () => {
-  it("accepts everyone by default (server-side rules decide who reaches the inbox)", () => {
-    expect(isSenderAllowed(account(), "anyone@example.com")).toBe(true);
-    expect(isSenderAllowed(account({ dmPolicy: "open" }), "anyone@example.com")).toBe(true);
-  });
-
-  it("a configured allowFrom turns on the local filter", () => {
-    const acc = account({ allowFrom: ["Alice@Example.com"] });
-    expect(isSenderAllowed(acc, "alice@example.com")).toBe(true);
-    expect(isSenderAllowed(acc, "bob@example.com")).toBe(false);
-  });
-
-  it("dmPolicy open ignores allowFrom; '*' opens an allowlist", () => {
-    expect(isSenderAllowed(account({ dmPolicy: "open", allowFrom: ["a@b.com"] }), "x@y.com")).toBe(true);
-    expect(isSenderAllowed(account({ allowFrom: ["a@b.com", "*"] }), "x@y.com")).toBe(true);
-  });
-
-  it("explicit allowlist with no entries denies; disabled denies everything", () => {
-    expect(isSenderAllowed(account({ dmPolicy: "allowlist" }), "a@b.com")).toBe(false);
-    expect(isSenderAllowed(account({ dmPolicy: "disabled", allowFrom: ["*"] }), "a@b.com")).toBe(false);
-  });
-
-  it("matches domains in every spelling the API accepts", () => {
-    for (const entry of ["example.com", "@example.com", "*@example.com"]) {
-      const acc = account({ allowFrom: [entry] });
-      expect(isSenderAllowed(acc, "x@example.com"), entry).toBe(true);
-      expect(isSenderAllowed(acc, "x@sub.example.com"), entry).toBe(false);
-      expect(isSenderAllowed(acc, "x@notexample.com"), entry).toBe(false);
-    }
-  });
-
-  it("'*.domain' matches the domain and its subdomains only", () => {
-    const acc = account({ allowFrom: ["*.example.com"] });
-    expect(isSenderAllowed(acc, "x@example.com")).toBe(true);
-    expect(isSenderAllowed(acc, "x@mail.example.com")).toBe(true);
-    expect(isSenderAllowed(acc, "x@example.com.evil.io")).toBe(false);
-    expect(isSenderAllowed(acc, "x@fakeexample.com")).toBe(false);
-  });
-
-  it("blank-only allowFrom is treated as unset", () => {
-    expect(isSenderAllowed(account({ allowFrom: ["", "  "] }), "a@b.com")).toBe(true);
-  });
-});
 
 describe("parseAddress", () => {
   it("extracts name and lowercases the address", () => {
@@ -119,27 +73,20 @@ describe("buildAgentText", () => {
   });
 });
 
-describe("resolveInboxSettings", () => {
-  const acct = account({ mode: "channel", allowFrom: ["ada@example.com"], dmPolicy: undefined });
-
-  it("inherits everything without an override", () => {
-    expect(resolveInboxSettings(acct, { id: "inb_1", address: "a@omail.sh" })).toEqual({
-      mode: "channel",
-      dmPolicy: undefined,
-      allowFrom: ["ada@example.com"],
-    });
+describe("resolveInboxMode", () => {
+  it("inherits the account mode without an override", () => {
+    expect(resolveInboxMode(account({ mode: "notify" }), { id: "inb_1", address: "a@omail.sh" })).toBe("notify");
   });
 
   it("matches by id before address, and by lowercased address", () => {
-    const a = account({ ...acct, inboxes: { inb_1: { mode: "tool" }, "a@omail.sh": { mode: "notify" } } });
-    expect(resolveInboxSettings(a, { id: "inb_1", address: "A@omail.sh" }).mode).toBe("tool");
-    expect(resolveInboxSettings(a, { id: "inb_2", address: "A@omail.sh" }).mode).toBe("notify");
+    const a = account({ inboxes: { inb_1: { mode: "tool" }, "a@omail.sh": { mode: "notify" } } });
+    expect(resolveInboxMode(a, { id: "inb_1", address: "A@omail.sh" })).toBe("tool");
+    expect(resolveInboxMode(a, { id: "inb_2", address: "A@omail.sh" })).toBe("notify");
+    expect(resolveInboxMode(a, { id: "inb_3" })).toBe("channel");
   });
 
-  it("an override's allowFrom replaces the account's and resets dmPolicy unless given", () => {
-    const a = account({ ...acct, dmPolicy: "disabled", inboxes: { inb_1: { allowFrom: [] } } });
-    const s = resolveInboxSettings(a, { id: "inb_1" });
-    expect(s.allowFrom).toEqual([]);
-    expect(s.dmPolicy).toBeUndefined(); // -> open by default for this inbox
+  it("ignores an invalid override value", () => {
+    const a = account({ inboxes: { inb_1: { mode: "shout" as never } } });
+    expect(resolveInboxMode(a, { id: "inb_1" })).toBe("channel");
   });
 });

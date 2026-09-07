@@ -18,8 +18,6 @@ const account: ResolvedOpenMailAccount = {
   inboxId: "inb_1",
   podId: null,
   baseUrl: "https://api.openmail.sh",
-  dmPolicy: undefined,
-  allowFrom: ["ada@example.com"],
   mode: "channel",
   mediaMaxMb: 20,
   inboxes: {},
@@ -88,13 +86,13 @@ describe("dispatchOpenMailMessage re-authorization", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
-  it("uses the API's From, not the frame's, when deciding the allowlist", async () => {
-    // Frame claims an allowed sender; the real message is from someone else.
-    const { ctx, api, run } = harness({ ...apiMessage, fromAddr: "mallory@evil.io" });
+  it("warns when the frame's From disagrees with the API, and trusts the API", async () => {
+    const { ctx, api, buildContext } = harness({ ...apiMessage, fromAddr: "mallory@evil.io" });
     const out = await dispatchOpenMailMessage({ ctx, event, api });
-    expect(out).toMatchObject({ kind: "dropped", reason: expect.stringMatching(/mallory@evil\.io/) });
-    expect(run).not.toHaveBeenCalled();
+    expect(out).toEqual({ kind: "dispatched" });
     expect(ctx.log?.warn).toHaveBeenCalledWith(expect.stringMatching(/claimed From ada@example.com but the API says mallory@evil.io/));
+    const built = buildContext.mock.calls[0][0] as { reply: { to: string } };
+    expect(built.reply.to).toBe("openmail:mallory@evil.io");
   });
 
   it("replies to the API's From even when the frame lies about an allowed sender", async () => {
@@ -155,8 +153,8 @@ describe("dispatchOpenMailMessage notify mode", () => {
     );
   });
 
-  it("still re-authorizes the sender before notifying", async () => {
-    const { ctx, api } = harness({ ...apiMessage, fromAddr: "mallory@evil.test" }, { mode: "notify" });
+  it("still requires the API to know the message before notifying", async () => {
+    const { ctx, api } = harness(null, { mode: "notify" });
     const notifyRuntime = { enqueueSystemEvent: vi.fn(() => true), requestHeartbeat: vi.fn() };
     const out = await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
     expect(out.kind).toBe("dropped");
@@ -224,17 +222,6 @@ describe("dispatchOpenMailMessage per-inbox overrides", () => {
     await dispatchOpenMailMessage({ ctx: b.ctx, event: { ...event, inbox_id: "inb_8" }, api: b.api, notifyRuntime, inboxAddress });
     expect(b.run).toHaveBeenCalledTimes(1);
     expect(notifyRuntime.enqueueSystemEvent).toHaveBeenCalledTimes(1);
-  });
-
-  it("applies a per-inbox allowFrom that replaces the account's", async () => {
-    // Account allows ada; this inbox only allows @corp.test, so ada is out here.
-    const { ctx, api, run } = harness(
-      { ...apiMessage, inboxId: "inb_7" },
-      { ...pod, inboxes: { inb_7: { allowFrom: ["@corp.test"] } } },
-    );
-    const out = await dispatchOpenMailMessage({ ctx, event: { ...event, inbox_id: "inb_7" }, api });
-    expect(out.kind).toBe("dropped");
-    expect(run).not.toHaveBeenCalled();
   });
 
   it("does not look up addresses when overrides are keyed by id only", async () => {

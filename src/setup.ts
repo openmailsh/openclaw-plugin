@@ -30,8 +30,6 @@ type OpenMailSetupInput = ChannelSetupInput & {
   baseUrl?: string;
   mailboxName?: string;
   displayName?: string;
-  /** Optional local sender filter. Empty (default): everyone the inbox receives from. */
-  allowFrom?: string[] | string;
   mode?: OpenMailMode;
 };
 
@@ -43,16 +41,8 @@ function describeMode(mode: OpenMailMode, where: string): string {
   return `Mode: channel. Mail to ${where} wakes the agent and it replies in the same thread.`;
 }
 
-function describeAllowFrom(allowFrom: string[], where: string): string {
-  return allowFrom.length > 0
-    ? `Only ${allowFrom.join(", ")} reach the agent (channels.openmail.allowFrom). Server-side allow/block rules are managed in the OpenMail console or CLI.`
-    : `Anyone can email ${where} and reach the agent. To restrict senders, set --allow-from here, or manage allow/block rules in the OpenMail console or CLI.`;
-}
-
-/** "a@x.com, y.com" | ["a@x.com","y.com"] -> lowercased, deduped list. */
-export function normalizeAllowFrom(raw: string[] | string | undefined): string[] {
-  const parts = Array.isArray(raw) ? raw : (raw ?? "").split(",");
-  return [...new Set(parts.map((v) => v.trim().toLowerCase()).filter(Boolean))];
+function describeSenders(where: string): string {
+  return `Anyone can email ${where} and reach the agent. To restrict senders, set allow/block rules in the OpenMail console or CLI (openmail policy ...).`;
 }
 
 export const OPENMAIL_META = {
@@ -77,7 +67,6 @@ const baseSetupAdapter = createPatchedAccountSetupAdapter({
     // `--pod <id|clientId|name>` with the resolved pod id.
     const podId = normalizeOptionalString(i.pod);
     const baseUrl = normalizeOptionalString(i.baseUrl);
-    const allowFrom = normalizeAllowFrom(i.allowFrom);
     if (apiKey) patch.apiKey = apiKey;
     // One shape per account: switching clears the other id (undefined is
     // dropped when the config is written).
@@ -89,10 +78,6 @@ const baseSetupAdapter = createPatchedAccountSetupAdapter({
       patch.podId = undefined;
     }
     if (baseUrl) patch.baseUrl = baseUrl;
-    if (allowFrom.length > 0) {
-      patch.allowFrom = allowFrom;
-      patch.dmPolicy = "allowlist";
-    }
     if (i.mode && OPENMAIL_MODES.includes(i.mode)) patch.mode = i.mode;
     return patch;
   },
@@ -230,13 +215,12 @@ export const setupAdapter: typeof baseSetupAdapter = {
     const baseUrl = normalizeOptionalString(i.baseUrl) ?? current.baseUrl;
     const api = new OpenMailApi(baseUrl, apiKey);
     const mode: OpenMailMode = i.mode && OPENMAIL_MODES.includes(i.mode) ? i.mode : current.mode;
-    const allowFrom = normalizeAllowFrom(i.allowFrom);
 
     const pod = normalizeOptionalString(i.pod) ?? (current.scope === "pod" ? current.podId ?? undefined : undefined);
     if (pod) {
       const result = await provisionOpenMailPod({ api, accountId, pod, log: (line) => runtime.log?.(line) });
       runtime.log?.(describeMode(mode, `any inbox in pod ${result.name}`));
-      runtime.log?.(describeAllowFrom(allowFrom, `the pod's inboxes`));
+      runtime.log?.(describeSenders("the pod's inboxes"));
       runtime.log?.(
         `The agent can create more inboxes in this pod (openclaw openmail -- inbox create --mailbox-name <name>); they join the channel automatically.`,
       );
@@ -261,7 +245,7 @@ export const setupAdapter: typeof baseSetupAdapter = {
       log: (line) => runtime.log?.(line),
     });
     runtime.log?.(describeMode(mode, result.address));
-    runtime.log?.(describeAllowFrom(allowFrom, result.address));
+    runtime.log?.(describeSenders(result.address));
     return {
       ...i,
       inboxId: result.inboxId,
@@ -313,13 +297,6 @@ export const openmailSetupContract = defineChannelSetupContract({
         flags: "--mode <mode>",
         description:
           "channel (default): mail wakes the agent, it replies in-thread. notify: agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound, email only when asked.",
-      },
-    },
-    allowFrom: {
-      kind: "string-list",
-      cli: {
-        flags: "--allow-from <senders>",
-        description: "Optional local filter: only these senders (addresses or domains, comma-separated) reach the agent. Default: everyone.",
       },
     },
     baseUrl: {
@@ -388,17 +365,6 @@ export const openmailSetupPlugin: ChannelPlugin<ResolvedOpenMailAccount> = {
         currentValue: ({ cfg, accountId }) =>
           resolveOpenMailAccount({ cfg, accountId }).inboxId ?? undefined,
         normalizeValue: ({ value }) => normalizeOptionalString(value) ?? "",
-      },
-      {
-        inputKey: "allowFrom",
-        message: "Restrict who reaches the agent? Addresses or domains, comma-separated. Empty = everyone.",
-        required: false,
-        applyEmptyValue: false,
-        currentValue: ({ cfg, accountId }) => {
-          const list = resolveOpenMailAccount({ cfg, accountId }).allowFrom;
-          return list.length > 0 ? list.join(", ") : undefined;
-        },
-        normalizeValue: ({ value }) => normalizeAllowFrom(value).join(","),
       },
     ],
     completionNote: {

@@ -1,15 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { OpenMailApi, OpenMailInbox } from "./openmail-api.js";
-import { normalizeAllowFrom, provisionOpenMailAccount, provisionOpenMailPod, setupAdapter } from "./setup.js";
+import { provisionOpenMailAccount, provisionOpenMailPod, setupAdapter } from "./setup.js";
 import { resolveOpenMailAccount } from "./accounts.js";
-
-describe("normalizeAllowFrom", () => {
-  it("splits, trims, lowercases and dedupes", () => {
-    expect(normalizeAllowFrom(" A@x.com, y.com ,a@X.com,, ")).toEqual(["a@x.com", "y.com"]);
-    expect(normalizeAllowFrom(["*", "*"])).toEqual(["*"]);
-    expect(normalizeAllowFrom(undefined)).toEqual([]);
-  });
-});
 
 const inbox: OpenMailInbox = { id: "inb_1", address: "sales@omail.sh" };
 

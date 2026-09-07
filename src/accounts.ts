@@ -27,8 +27,6 @@ export type OpenMailMode = (typeof OPENMAIL_MODES)[number];
 /** Per-inbox overrides inside a pod account. Keyed by inbox address or id. */
 export type OpenMailInboxConfig = {
   mode?: OpenMailMode;
-  dmPolicy?: string;
-  allowFrom?: string[];
 };
 
 export type OpenMailAccountConfig = {
@@ -41,12 +39,10 @@ export type OpenMailAccountConfig = {
   /** Whole pod: all its inboxes, present and future. Needs a pod-scoped key. */
   podId?: string;
   baseUrl?: string;
-  dmPolicy?: string;
-  allowFrom?: string[];
   mode?: OpenMailMode;
   /** Aggregate cap for inbound attachments handed to the agent. 0 disables staging. */
   mediaMaxMb?: number;
-  /** Pod accounts: override mode / sender filter for individual inboxes. */
+  /** Pod accounts: override the mode for individual inboxes. */
   inboxes?: Record<string, OpenMailInboxConfig>;
   accounts?: Record<string, OpenMailAccountConfig>;
   defaultAccount?: string;
@@ -65,39 +61,26 @@ export type ResolvedOpenMailAccount = {
   inboxId: string | null;
   podId: string | null;
   baseUrl: string;
-  dmPolicy: string | undefined;
-  allowFrom: string[];
   mode: OpenMailMode;
   mediaMaxMb: number;
   /** Normalised per-inbox overrides; address keys are lowercased. */
   inboxes: Record<string, OpenMailInboxConfig>;
 };
 
-/** What governs one inbox: the account's values unless overridden for it. */
-export type InboxSettings = Pick<ResolvedOpenMailAccount, "mode" | "dmPolicy" | "allowFrom">;
 
 function normalizeMode(value: unknown): OpenMailMode | undefined {
   return OPENMAIL_MODES.includes(value as OpenMailMode) ? (value as OpenMailMode) : undefined;
 }
 
-/**
- * Look up overrides by inbox id first, then by address. `undefined` for a
- * field means "inherit"; a present allowFrom replaces the account's list
- * rather than merging, so one inbox can be stricter or looser than the rest.
- */
-export function resolveInboxSettings(
+/** The mode governing one inbox: an override by id, then by address, else the account's. */
+export function resolveInboxMode(
   account: ResolvedOpenMailAccount,
   inbox: { id: string; address?: string | null },
-): InboxSettings {
+): OpenMailMode {
   const override =
     account.inboxes[inbox.id] ??
     (inbox.address ? account.inboxes[inbox.address.trim().toLowerCase()] : undefined);
-  if (!override) return { mode: account.mode, dmPolicy: account.dmPolicy, allowFrom: account.allowFrom };
-  return {
-    mode: normalizeMode(override.mode) ?? account.mode,
-    dmPolicy: normalizeOptionalString(override.dmPolicy) ?? (override.allowFrom ? undefined : account.dmPolicy),
-    allowFrom: Array.isArray(override.allowFrom) ? override.allowFrom.map(String) : account.allowFrom,
-  };
+  return normalizeMode(override?.mode) ?? account.mode;
 }
 
 const {
@@ -189,8 +172,6 @@ export function resolveOpenMailAccount(params: {
     inboxId: scope === "inbox" ? inboxId : null,
     podId: scope === "pod" ? podId : null,
     baseUrl,
-    dmPolicy: normalizeOptionalString(merged.dmPolicy),
-    allowFrom: Array.isArray(merged.allowFrom) ? merged.allowFrom.map(String) : [],
     mode: normalizeMode(merged.mode) ?? "channel",
     mediaMaxMb,
     inboxes: Object.fromEntries(

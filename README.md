@@ -29,7 +29,6 @@ Get a key from [app.openmail.sh](https://app.openmail.sh) or with the
 | `--inbox-id <id>` | uses that existing inbox, needed when the key can see several |
 | `--pod <id>` | covers a whole pod instead of one inbox; see [Several inboxes](#several-inboxes) |
 | `--mode notify` / `--mode tool` | how inbound mail reaches the agent; see [Modes](#modes). Default `channel`. |
-| `--allow-from a@x.com,x.com` | optional local filter: only these senders (addresses, domains, `*.x.com`) reach the agent. **Default: everyone** the inbox receives from. Server-side allow/block rules are yours to manage in the OpenMail console or CLI; the plugin never writes them. |
 
 The address to email is printed at the end. Re-running against an existing
 account is a no-op.
@@ -65,8 +64,8 @@ openclaw openmail --account outreach -- inbox create --mailbox-name outreach-3
 openclaw openmail --account outreach -- send --inbox-id <id> --thread-id <thr> --to … --body …
 ```
 
-Inboxes in a pod share the account's `mode` and `allowFrom` unless you override
-them per inbox, keyed by address or id:
+Inboxes in a pod share the account's `mode` unless you override it per inbox,
+keyed by address or id:
 
 ```bash
 openclaw config set 'channels.openmail.accounts.outreach.inboxes["me@omail.sh"].mode' notify
@@ -75,13 +74,12 @@ openclaw config set 'channels.openmail.accounts.outreach.inboxes["me@omail.sh"].
 ```json5
 "inboxes": {
   "support@omail.sh": { "mode": "channel" },
-  "me@omail.sh":      { "mode": "notify", "allowFrom": ["@mycompany.com"] },
+  "me@omail.sh":      { "mode": "notify" },
   "signups@omail.sh": { "mode": "tool" }          // inbound ignored; CLI only
 }
 ```
 
-An override's `allowFrom` replaces the account's list for that inbox; unset
-fields inherit. New inboxes stream inbound mail within a minute (the gateway
+New inboxes stream inbound mail within a minute (the gateway
 re-subscribes on a timer). Each `(inbox, sender)` pair is its own conversation, replies go out
 from the inbox that received the mail, and `--pod` accepts the pod id, its
 `clientId`, or its name. Trade-off: the stored key can read every inbox in the pod, not one.
@@ -92,9 +90,9 @@ Email is the easiest prompt-injection surface an agent has. The inbox itself
 is open (an agent that signs up for services must receive mail from anyone),
 so the defences are on what the agent can *do*, not on who can write:
 
-- **Sender rules stay yours.** The plugin never writes server-side allow/block
-  rules; manage those in the OpenMail console or CLI (`openmail policy …`).
-  `allowFrom` / `dmPolicy` in OpenClaw config add an optional local filter.
+- **Sender rules live in OpenMail, not here.** Who may email an inbox is
+  decided by OpenMail's allow/block policy (console or `openmail policy …`),
+  before delivery. The plugin has no second list to keep in sync.
 - **Least-privilege key.** Only an inbox-scoped key is stored; it cannot list
   other inboxes, mint keys, or change policy.
 - **Re-authorized replies.** The websocket frame is only a hint. Before the
@@ -150,7 +148,7 @@ One channel, three ways to use it. Pick per account with `--mode` or
 expires Friday" and only answers the sender when you say so. `channel` fits an
 inbox that *is* the agent (support@, sales@). `tool` fits "sign up for X and
 tell me the code" flows where the agent reads the inbox itself via the CLI.
-Re-authorization and `allowFrom` apply in every mode.
+Re-authorization applies in every mode.
 
 ## Behaviour
 
@@ -165,11 +163,6 @@ Re-authorization and `allowFrom` apply in every mode.
   --to a@b.com "…"` (first line becomes the subject) or the CLI `send`.
   Outbound allow/block rules, if you want them, live in OpenMail
   (`openmail policy … --direction outbound`).
-- Who may email the inbox is governed by OpenMail's allow/block rules
-  (console or CLI). `channels.openmail.allowFrom` is an optional local filter
-  with entries like `"someone@x.com"`, `"x.com"`, `"@x.com"` or `"*.x.com"`;
-  setting it implies `dmPolicy: "allowlist"`. `"open"` (default) hears from
-  everyone; `"disabled"` from nobody.
 - Mails from the same sender are processed in order; different senders run
   in parallel.
 
@@ -182,7 +175,6 @@ Re-authorization and `allowFrom` apply in every mode.
       "apiKey": "om_…",          // inbox-scoped, or a SecretRef (below)
       "inboxId": "…",             // or "podId": "…" for a whole pod
       "mode": "channel",         // pod accounts: per-inbox via "inboxes": { "<addr|id>": { "mode": … } }         // default; or "notify" / "tool"
-      "allowFrom": ["@yourcompany.com"],  // optional local filter; default: everyone
       "mediaMaxMb": 20,          // default
       "accounts": {
         "sales": {
