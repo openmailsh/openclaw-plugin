@@ -142,15 +142,5 @@
       "minHostVersion": ">=2026.9.2",
       "allowInvalidConfigRecovery": true
     }
-  },
-  "pnpm": {
-    "ignoredBuiltDependencies": [
-      "@google/genai",
-      "esbuild",
-      "koffi",
-      "openclaw",
-      "protobufjs",
-      "tree-sitter-bash"
-    ]
   }
 }
