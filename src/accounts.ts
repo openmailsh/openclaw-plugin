@@ -2,21 +2,31 @@
 import { createAccountListHelpers } from "openclaw/plugin-sdk/account-helpers";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/account-id";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
+import {
+  hasConfiguredSecretInput,
+  normalizeResolvedSecretInputString,
+  type SecretInput,
+} from "openclaw/plugin-sdk/secret-input";
 import { normalizeOptionalString } from "openclaw/plugin-sdk/string-coerce-runtime";
 
 export const OPENMAIL_CHANNEL_ID = "openmail" as const;
 export const DEFAULT_BASE_URL = "https://api.openmail.sh";
+/** Aggregate size of inbound attachments staged for the agent per message. */
+export const DEFAULT_MEDIA_MAX_MB = 20;
 
 export type OpenMailAccountConfig = {
   name?: string;
   enabled?: boolean;
-  apiKey?: string;
+  /** Literal key or a SecretRef ({ source: "env" | "store" | "file", provider, id }). */
+  apiKey?: SecretInput;
   inboxId?: string;
   baseUrl?: string;
   dmPolicy?: string;
   allowFrom?: string[];
   /** Let the agent open new email threads (proactive sends). Default false: reply-only. */
   allowNewThreads?: boolean;
+  /** Aggregate cap for inbound attachments handed to the agent. 0 disables staging. */
+  mediaMaxMb?: number;
   accounts?: Record<string, OpenMailAccountConfig>;
   defaultAccount?: string;
 };
@@ -32,6 +42,7 @@ export type ResolvedOpenMailAccount = {
   dmPolicy: string | undefined;
   allowFrom: string[];
   allowNewThreads: boolean;
+  mediaMaxMb: number;
 };
 
 const {
@@ -54,6 +65,17 @@ function channelConfig(cfg: OpenClawConfig): OpenMailAccountConfig | undefined {
   return cfg.channels?.[OPENMAIL_CHANNEL_ID] as OpenMailAccountConfig | undefined;
 }
 
+/**
+ * Literal string, or a SecretRef the host has already materialised. A ref
+ * that is still unresolved throws with the config path, which is what we want
+ * at gateway start: a loud "secret not available" beats a silent 401.
+ */
+function resolveApiKey(value: unknown, fallback: string | undefined, path: string): string | null {
+  const present =
+    value !== undefined && value !== null && !(typeof value === "string" && value.trim() === "");
+  return normalizeResolvedSecretInputString({ value: present ? value : fallback, path }) ?? null;
+}
+
 export function resolveOpenMailAccount(params: {
   cfg: OpenClawConfig;
   accountId?: string | null;
@@ -66,10 +88,15 @@ export function resolveOpenMailAccount(params: {
 
   // Env fallbacks only apply to the default account, matching other channels.
   const isDefault = accountId === DEFAULT_ACCOUNT_ID;
-  const apiKey =
-    normalizeOptionalString(merged.apiKey) ??
-    (isDefault ? normalizeOptionalString(process.env.OPENMAIL_API_KEY) : undefined) ??
-    null;
+  const apiKeyPath =
+    isDefault && !channel?.accounts?.[accountId]
+      ? "channels.openmail.apiKey"
+      : `channels.openmail.accounts.${accountId}.apiKey`;
+  const apiKey = resolveApiKey(
+    merged.apiKey,
+    isDefault ? normalizeOptionalString(process.env.OPENMAIL_API_KEY) : undefined,
+    apiKeyPath,
+  );
   const inboxId =
     normalizeOptionalString(merged.inboxId) ??
     (isDefault ? normalizeOptionalString(process.env.OPENMAIL_INBOX_ID) : undefined) ??
@@ -79,17 +106,23 @@ export function resolveOpenMailAccount(params: {
     normalizeOptionalString(process.env.OPENMAIL_BASE_URL) ??
     DEFAULT_BASE_URL
   ).replace(/\/+$/, "");
+  const mediaMaxMb =
+    typeof merged.mediaMaxMb === "number" && Number.isFinite(merged.mediaMaxMb) && merged.mediaMaxMb >= 0
+      ? merged.mediaMaxMb
+      : DEFAULT_MEDIA_MAX_MB;
 
   return {
     accountId,
     name: normalizeOptionalString(merged.name),
     enabled: channel?.enabled !== false && merged.enabled !== false,
-    configured: Boolean(apiKey && inboxId),
+    // A SecretRef counts as configured even before the host resolves it.
+    configured: Boolean((apiKey || hasConfiguredSecretInput(merged.apiKey)) && inboxId),
     apiKey,
     inboxId,
     baseUrl,
     dmPolicy: normalizeOptionalString(merged.dmPolicy),
     allowFrom: Array.isArray(merged.allowFrom) ? merged.allowFrom.map(String) : [],
     allowNewThreads: merged.allowNewThreads === true,
+    mediaMaxMb,
   };
 }

@@ -209,7 +209,7 @@ export const openmailSetupContract = defineChannelSetupContract({
     apiKey: {
       kind: "string",
       sensitive: true,
-      cli: { flags: "--api-key <key>", description: "OpenMail API key (inbox-scoped recommended)" },
+      cli: { flags: "--api-key <key>", description: "OpenMail API key (any scope; an inbox-scoped key is minted for you)" },
     },
     inboxId: {
       kind: "string",

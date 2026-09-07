@@ -17,6 +17,7 @@ import {
 import { openmailChannelConfigSchema } from "./config-schema.js";
 import { startOpenMailGatewayAccount } from "./gateway.js";
 import { OpenMailApi } from "./openmail-api.js";
+import { collectRuntimeConfigAssignments, secretTargetRegistryEntries } from "./secret-contract.js";
 import { OPENMAIL_META, openmailSetupPlugin } from "./setup.js";
 
 type OpenMailProbe =
@@ -95,6 +96,7 @@ export const openmailPlugin: ChannelPlugin<ResolvedOpenMailAccount, OpenMailProb
       gateway: {
         startAccount: async (ctx) => await startOpenMailGatewayAccount(ctx),
       },
+      secrets: { secretTargetRegistryEntries, collectRuntimeConfigAssignments },
       messaging: {
         targetPrefixes: ["openmail", "email", "mail"],
         targetIdComparison: "lowercase",

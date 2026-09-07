@@ -1,16 +1,14 @@
 // Gateway lifecycle: hold the OpenMail websocket for the account's lifetime,
-// reconnect with backoff, dedupe by event_id, hand each inbound mail to the
-// turn kernel. The gateway is already a daemon, so no separate bridge process.
-import fs from "node:fs/promises";
-import path from "node:path";
+// reconnect with backoff, and hand each inbound mail to the ingress layer
+// (see ingress.ts) which owns dedupe, retries and persistence. The gateway is
+// already a daemon, so no separate bridge process.
 import WebSocket from "ws";
 import type { ChannelGatewayContext } from "openclaw/plugin-sdk/channel-contract";
 import { waitUntilAbort } from "openclaw/plugin-sdk/channel-outbound";
 import { channelReadyPatch } from "openclaw/plugin-sdk/gateway-runtime";
-import { createChannelReplayGuard } from "openclaw/plugin-sdk/persistent-dedupe";
-import { resolveStateDir } from "openclaw/plugin-sdk/state-paths";
-import { OPENMAIL_CHANNEL_ID, type ResolvedOpenMailAccount } from "./accounts.js";
+import type { ResolvedOpenMailAccount } from "./accounts.js";
 import { dispatchOpenMailMessage, type OpenMailMessageReceived } from "./inbound.js";
+import { createIngress } from "./ingress.js";
 import { OpenMailApi } from "./openmail-api.js";
 
 // Server closes we must not retry: revoked key, forbidden, connection cap.
@@ -18,27 +16,8 @@ const FATAL_CLOSE_CODES = new Set([4001, 4003, 4008]);
 const MIN_STABLE_MS = 60_000;
 const MAX_BACKOFF_MS = 30_000;
 const PING_INTERVAL_MS = 30_000;
-// Local retries before we give an event back to the server for replay.
-const DISPATCH_RETRY_DELAYS_MS = [2_000, 10_000, 30_000];
 
-type ReplayEvent = { accountId: string; eventId: string };
-
-function createReplayGuard(onDiskError: (error: unknown) => void) {
-  return createChannelReplayGuard<ReplayEvent>({
-    dedupe: {
-      ttlMs: 24 * 60 * 60 * 1000,
-      memoryMaxSize: 2_000,
-      pluginId: OPENMAIL_CHANNEL_ID,
-      namespacePrefix: "openmail-event-dedupe",
-      stateMaxEntries: 20_000,
-      onDiskError,
-    },
-    buildReplayKey: (event) => event.eventId,
-    namespace: (event) => event.accountId,
-  });
-}
-
-function toWsUrl(baseUrl: string): string {
+export function toWsUrl(baseUrl: string): string {
   return `${baseUrl.replace(/^http:\/\//, "ws://").replace(/^https:\/\//, "wss://")}/v1/ws`;
 }
 
@@ -73,62 +52,32 @@ export async function startOpenMailGatewayAccount(
   const inbox = await api.getInbox(account.inboxId);
   ctx.log?.info?.(`[${ctx.accountId}] OpenMail inbox ${inbox.address}`);
 
-  const replayGuard = createReplayGuard((error) =>
-    ctx.log?.warn?.(`openmail: dedupe storage failed: ${String(error)}`),
-  );
-
   const signal = ctx.abortSignal;
   let retries = 0;
   let stopError: unknown;
 
-  // Last event we fully handled. Sent as `last_event_id` on (re)connect so the
-  // server replays anything after it; persisted so a gateway restart replays
-  // what arrived while we were down instead of silently dropping it.
-  const cursor = createCursorStore(ctx.accountId);
-  let lastEventId = await cursor.load();
+  const { ingress, cursor } = createIngress({
+    ctx,
+    dispatch: (event, lifecycle) => {
+      ctx.setStatus({ ...ctx.getStatus(), accountId: ctx.accountId, lastInboundAt: Date.now() });
+      return dispatchOpenMailMessage({ ctx, event, api, lifecycle });
+    },
+  });
+  ctx.log?.info?.(`openmail: ingress mode ${ingress.mode}`);
+  ingress.start();
 
-  /**
-   * Hand one event to the agent. A failure is retried locally with backoff;
-   * if it still fails we release the dedupe claim and leave the cursor where
-   * it was, so the next reconnect gets the event again from the server.
-   */
+  // Last event we admitted. Sent as `last_event_id` on (re)connect so the
+  // server replays anything after it. Admission is the commit point (a durable
+  // row, or a completed in-memory dispatch), so the cursor may move.
+  let lastEventId = await cursor.load().catch(() => undefined);
   const handleEvent = async (event: OpenMailMessageReceived) => {
-    let attempt = 0;
-    for (;;) {
-      const result = await replayGuard.processGuarded(
-        { accountId: ctx.accountId, eventId: event.event_id },
-        async () => {
-          ctx.setStatus({ ...ctx.getStatus(), accountId: ctx.accountId, lastInboundAt: Date.now() });
-          await dispatchOpenMailMessage({ ctx, event, api });
-        },
-        { onError: "release" },
-      ).then(
-        (r) => ({ ok: true as const, r }),
-        (error: unknown) => ({ ok: false as const, error }),
-      );
-
-      if (result.ok) {
-        if (result.r.kind === "duplicate") {
-          ctx.log?.info?.(`openmail: skip duplicate event ${event.event_id}`);
-        }
-        lastEventId = event.event_id;
-        await cursor.save(event.event_id);
-        return;
-      }
-
-      const delay = DISPATCH_RETRY_DELAYS_MS[attempt];
-      if (delay === undefined || signal?.aborted) {
-        ctx.log?.error?.(
-          `openmail: giving up on event ${event.event_id} after ${attempt} retries; it will be replayed on reconnect: ${String(result.error)}`,
-        );
-        return;
-      }
-      attempt += 1;
-      ctx.log?.warn?.(
-        `openmail: dispatch of ${event.event_id} failed, retry ${attempt} in ${delay}ms: ${String(result.error)}`,
-      );
-      await sleep(delay, signal);
-    }
+    await ingress.receive(event);
+    lastEventId = event.event_id;
+    await cursor.save(event.event_id).catch((error: unknown) => {
+      // Losing the cursor only costs a server-side replay after restart; the
+      // queue dedupes anything we already have.
+      ctx.log?.warn?.(`openmail: cursor save failed: ${String(error)}`);
+    });
   };
 
   try {
@@ -145,7 +94,6 @@ export async function startOpenMailGatewayAccount(
       try {
         fatal = await connectOnce({
           ctx,
-          api,
           wsUrl: toWsUrl(account.baseUrl),
           apiKey: account.apiKey,
           inboxId: account.inboxId,
@@ -165,6 +113,7 @@ export async function startOpenMailGatewayAccount(
     stopError = error;
     throw error;
   } finally {
+    await ingress.stop().catch(() => undefined);
     ctx.setStatus({
       accountId: ctx.accountId,
       running: false,
@@ -175,37 +124,9 @@ export async function startOpenMailGatewayAccount(
   }
 }
 
-/** Tiny per-account file: `{ lastEventId }` under the OpenClaw state dir. */
-function createCursorStore(accountId: string) {
-  const file = path.join(
-    resolveStateDir(),
-    "openmail",
-    `cursor-${accountId.replace(/[^A-Za-z0-9_-]/g, "_")}.json`,
-  );
-  return {
-    async load(): Promise<string | undefined> {
-      try {
-        const raw = JSON.parse(await fs.readFile(file, "utf8")) as { lastEventId?: unknown };
-        return typeof raw.lastEventId === "string" ? raw.lastEventId : undefined;
-      } catch {
-        return undefined;
-      }
-    },
-    async save(lastEventId: string): Promise<void> {
-      try {
-        await fs.mkdir(path.dirname(file), { recursive: true });
-        await fs.writeFile(file, JSON.stringify({ lastEventId }), "utf8");
-      } catch {
-        // Best effort; losing the cursor only costs replay after a restart.
-      }
-    },
-  };
-}
-
 /** Resolves when the socket closes. Returns a reason string for fatal closes. */
 function connectOnce(params: {
   ctx: ChannelGatewayContext<ResolvedOpenMailAccount>;
-  api: OpenMailApi;
   wsUrl: string;
   apiKey: string;
   inboxId: string;
@@ -219,8 +140,7 @@ function connectOnce(params: {
     });
     let settled = false;
     let ping: NodeJS.Timeout | undefined;
-    // Serialize inbound turns so lastEventId advances in receive order and
-    // same-sender sessions do not run concurrently.
+    // Admit in receive order so the cursor never skips ahead of an event.
     let eventTail: Promise<void> = Promise.resolve();
 
     const finish = (fatal?: string, err?: Error) => {
@@ -273,10 +193,11 @@ function connectOnce(params: {
       }
       if (payload.event !== "message.received") return;
       const event = payload as unknown as OpenMailMessageReceived;
+      if (typeof event.event_id !== "string" || !event.message?.id || !event.thread_id) return;
       eventTail = eventTail
         .then(() => params.onEvent(event))
         .catch((handlerErr) => {
-          ctx.log?.warn?.(`openmail: event handler error: ${String(handlerErr)}`);
+          ctx.log?.warn?.(`openmail: event admission error: ${String(handlerErr)}`);
         });
     });
 

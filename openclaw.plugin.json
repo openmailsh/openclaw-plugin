@@ -1,7 +1,8 @@
 {
   "id": "openmail",
   "name": "OpenMail",
-  "description": "OpenMail channel plugin: give your agent its own email address.",
+  "description": "OpenMail channel plugin for OpenClaw: give your agent an email address.",
+  "version": "0.1.0",
   "activation": {
     "onStartup": false
   },
@@ -13,23 +14,126 @@
       "label": "OpenMail",
       "description": "Email for agents. Inbound mail wakes the agent; replies go out in the same thread.",
       "schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
-        "additionalProperties": false,
         "properties": {
-          "enabled": {
-            "type": "boolean"
-          },
           "name": {
             "type": "string"
           },
+          "enabled": {
+            "type": "boolean"
+          },
+          "configWrites": {
+            "type": "boolean"
+          },
           "apiKey": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "const": "env"
+                      },
+                      "provider": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                      },
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "provider",
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "const": "store"
+                      },
+                      "provider": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                      },
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "provider",
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "const": "file"
+                      },
+                      "provider": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                      },
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "provider",
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "source": {
+                        "type": "string",
+                        "const": "exec"
+                      },
+                      "provider": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                      },
+                      "id": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "source",
+                      "provider",
+                      "id"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            ]
           },
           "inboxId": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "baseUrl": {
-            "type": "string"
+            "type": "string",
+            "format": "uri"
           },
           "dmPolicy": {
             "type": "string",
@@ -45,17 +149,171 @@
               "type": "string"
             }
           },
-          "defaultAccount": {
-            "type": "string"
+          "allowNewThreads": {
+            "type": "boolean"
+          },
+          "mediaMaxMb": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
           },
           "accounts": {
             "type": "object",
-            "additionalProperties": true
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                },
+                "configWrites": {
+                  "type": "boolean"
+                },
+                "apiKey": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "oneOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string",
+                              "const": "env"
+                            },
+                            "provider": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                            },
+                            "id": {
+                              "type": "string",
+                              "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+                            }
+                          },
+                          "required": [
+                            "source",
+                            "provider",
+                            "id"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string",
+                              "const": "store"
+                            },
+                            "provider": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                            },
+                            "id": {
+                              "type": "string",
+                              "pattern": "^[A-Z][A-Z0-9_]{0,127}$"
+                            }
+                          },
+                          "required": [
+                            "source",
+                            "provider",
+                            "id"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string",
+                              "const": "file"
+                            },
+                            "provider": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "source",
+                            "provider",
+                            "id"
+                          ],
+                          "additionalProperties": false
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "source": {
+                              "type": "string",
+                              "const": "exec"
+                            },
+                            "provider": {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9_-]{0,63}$"
+                            },
+                            "id": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "source",
+                            "provider",
+                            "id"
+                          ],
+                          "additionalProperties": false
+                        }
+                      ]
+                    }
+                  ]
+                },
+                "inboxId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "baseUrl": {
+                  "type": "string",
+                  "format": "uri"
+                },
+                "dmPolicy": {
+                  "type": "string",
+                  "enum": [
+                    "open",
+                    "allowlist",
+                    "disabled"
+                  ]
+                },
+                "allowFrom": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "allowNewThreads": {
+                  "type": "boolean"
+                },
+                "mediaMaxMb": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              },
+              "additionalProperties": false
+            }
           },
-          "allowNewThreads": {
-            "type": "boolean"
+          "defaultAccount": {
+            "type": "string"
           }
-        }
+        },
+        "additionalProperties": false
       },
       "uiHints": {
         "apiKey": {
@@ -80,6 +338,11 @@
         "allowNewThreads": {
           "label": "Allow new threads",
           "help": "Off (default): the agent can only reply in-thread. On: it may email any address."
+        },
+        "mediaMaxMb": {
+          "label": "Attachment budget (MB)",
+          "help": "Total size of inbound attachments handed to the agent as files per email. 0 disables.",
+          "advanced": true
         }
       }
     }
@@ -88,6 +351,18 @@
     "type": "object",
     "additionalProperties": false,
     "properties": {}
+  },
+  "secretInputs": {
+    "paths": [
+      {
+        "path": "channels.openmail.apiKey",
+        "expected": "string"
+      },
+      {
+        "path": "channels.openmail.accounts.*.apiKey",
+        "expected": "string"
+      }
+    ]
   },
   "skills": [
     "skills"

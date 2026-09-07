@@ -19,7 +19,11 @@
     "build": "NODE_OPTIONS=--max-old-space-size=12288 tsc",
     "typecheck": "NODE_OPTIONS=--max-old-space-size=12288 tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "pnpm build"
+    "manifest": "node scripts/build-manifest.mjs",
+    "manifest:check": "node scripts/build-manifest.mjs --check",
+    "validate-plugin": "node scripts/validate-plugin.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm manifest:check && pnpm validate-plugin",
+    "prepublishOnly": "pnpm check"
   },
   "dependencies": {
     "ws": "^8.18.0",
@@ -46,19 +50,15 @@
       "./dist/index.js"
     ],
     "setupEntry": "./dist/setup-entry.js",
-    "install": {
-      "npmSpec": "@openmail/openclaw",
-      "defaultChoice": "npm",
-      "minHostVersion": ">=2026.9.2"
-    },
-    "compat": {
-      "pluginApi": ">=2026.9.2"
-    },
-    "build": {
-      "openclawVersion": "2026.9.2"
-    },
     "channel": {
       "id": "openmail",
+      "label": "OpenMail",
+      "selectionLabel": "OpenMail (email)",
+      "docsPath": "/channels/openmail",
+      "docsLabel": "openmail",
+      "blurb": "Give your agent its own email address. Inbound mail wakes the agent; replies go out in-thread. Needs an inbox to exist; creates one if the key has none.",
+      "order": 80,
+      "quickstartAllowFrom": true,
       "configuredState": {
         "env": {
           "allOf": [
@@ -66,77 +66,81 @@
           ]
         }
       },
-      "label": "OpenMail",
-      "selectionLabel": "OpenMail (email)",
-      "docsPath": "/channels/openmail",
-      "docsLabel": "openmail",
-      "blurb": "Give your agent its own email address. Inbound mail wakes the agent; replies go out in-thread. Creates an inbox if your key has none.",
-      "order": 80,
       "setup": {
         "fields": [
           {
-            "key": "apiKey",
             "kind": "string",
             "sensitive": true,
             "cli": {
               "flags": "--api-key <key>",
               "description": "OpenMail API key (any scope; an inbox-scoped key is minted for you)"
-            }
+            },
+            "key": "apiKey"
           },
           {
-            "key": "inboxId",
             "kind": "string",
             "cli": {
               "flags": "--inbox-id <id>",
               "description": "Use an existing inbox (only needed when the key can see several)"
-            }
+            },
+            "key": "inboxId"
           },
           {
-            "key": "mailboxName",
             "kind": "string",
             "cli": {
               "flags": "--mailbox-name <name>",
               "description": "Create a new inbox with this local part, e.g. sales -> sales@omail.sh"
-            }
+            },
+            "key": "mailboxName"
           },
           {
-            "key": "displayName",
             "kind": "string",
             "cli": {
               "flags": "--display-name <name>",
               "description": "Sender name for a newly created inbox"
-            }
+            },
+            "key": "displayName"
           },
           {
-            "key": "keepKey",
             "kind": "boolean",
             "cli": {
               "flags": "--keep-key",
               "description": "Store the given key as-is instead of minting an inbox-scoped key"
-            }
+            },
+            "key": "keepKey"
           },
           {
-            "key": "allowFrom",
             "kind": "string-list",
             "cli": {
               "flags": "--allow-from <senders>",
               "description": "Who may email the agent: addresses or domains, comma-separated. \"*\" opens it to everyone. Default: nobody."
-            }
+            },
+            "key": "allowFrom"
           },
           {
-            "key": "baseUrl",
             "kind": "string",
             "cli": {
               "flags": "--base-url <url>",
               "description": "OpenMail API base URL (default https://api.openmail.sh)"
-            }
+            },
+            "key": "baseUrl"
           }
         ]
       }
     },
-    "release": {
-      "publishToClawHub": true,
-      "publishToNpm": true
+    "compat": {
+      "pluginApi": ">=2026.9.2",
+      "minGatewayVersion": "2026.9.2"
+    },
+    "build": {
+      "openclawVersion": "2026.9.2",
+      "pluginSdkVersion": "2026.9.2"
+    },
+    "install": {
+      "npmSpec": "@openmail/openclaw",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.9.2",
+      "allowInvalidConfigRecovery": true
     }
   },
   "pnpm": {

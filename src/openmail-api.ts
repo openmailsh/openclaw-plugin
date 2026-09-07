@@ -9,6 +9,27 @@ export type OpenMailInbox = {
   displayName?: string | null;
 };
 
+export type OpenMailAttachment = {
+  filename: string;
+  contentType?: string | null;
+  sizeBytes?: number | null;
+  url?: string | null;
+  /** Server-side text extraction (PDF, docx, csv...). Absent for binary media. */
+  parsedText?: string | null;
+};
+
+export type OpenMailMessage = {
+  id: string;
+  threadId: string;
+  direction?: "inbound" | "outbound";
+  fromAddr?: string | null;
+  toAddr?: string | null;
+  subject?: string | null;
+  bodyText?: string | null;
+  attachments?: OpenMailAttachment[];
+  createdAt?: string;
+};
+
 export type SendResult = {
   id?: string;
   messageId?: string;
@@ -23,6 +44,16 @@ export class OpenMailApiError extends Error {
     readonly body: unknown,
   ) {
     super(message);
+  }
+}
+
+export class AttachmentTooLargeError extends Error {
+  constructor(
+    readonly filename: string,
+    readonly bytes: number,
+    readonly maxBytes: number,
+  ) {
+    super(`Attachment ${filename} (${bytes} bytes) exceeds the ${maxBytes} byte media budget`);
   }
 }
 
@@ -132,6 +163,70 @@ export class OpenMailApi {
       return { kind: "resolved", inbox: await this.createInbox(create), created: true };
     }
     return { kind: "ambiguous", inboxes };
+  }
+
+  /** Messages in a thread, oldest first. Scoped keys only see their own inbox. */
+  async listThreadMessages(threadId: string): Promise<OpenMailMessage[]> {
+    const data = (await this.request(
+      "GET",
+      `/v1/threads/${encodeURIComponent(threadId)}/messages`,
+    )) as { data?: OpenMailMessage[]; messages?: OpenMailMessage[] };
+    return data.data ?? data.messages ?? [];
+  }
+
+  /**
+   * Authoritative copy of one message, fetched through the thread it claims
+   * to belong to. Null when the thread is not visible to this key or does not
+   * contain the message — i.e. the (messageId, threadId) pair was not issued
+   * by OpenMail for this inbox.
+   */
+  async findMessage(threadId: string, messageId: string): Promise<OpenMailMessage | null> {
+    try {
+      const messages = await this.listThreadMessages(threadId);
+      return messages.find((m) => m.id === messageId) ?? null;
+    } catch (err) {
+      if (err instanceof OpenMailApiError && (err.status === 404 || err.status === 403)) return null;
+      throw err;
+    }
+  }
+
+  /** Raw attachment bytes; `maxBytes` aborts the download once exceeded. */
+  async downloadAttachment(
+    messageId: string,
+    filename: string,
+    maxBytes: number,
+  ): Promise<{ buffer: Buffer; contentType: string | undefined }> {
+    const response = await fetch(
+      `${this.baseUrl}/v1/attachments/${encodeURIComponent(messageId)}/${encodeURIComponent(filename)}`,
+      { headers: { Authorization: `Bearer ${this.apiKey}` } },
+    );
+    if (!response.ok) {
+      throw new OpenMailApiError(
+        `OpenMail API ${response.status}: attachment download failed`,
+        response.status,
+        await response.text().catch(() => ""),
+      );
+    }
+    const declared = Number(response.headers.get("content-length") ?? 0);
+    if (declared > maxBytes) throw new AttachmentTooLargeError(filename, declared, maxBytes);
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    const reader = response.body?.getReader();
+    if (!reader) return { buffer: Buffer.alloc(0), contentType: undefined };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new AttachmentTooLargeError(filename, total, maxBytes);
+      }
+      chunks.push(value);
+    }
+    return {
+      buffer: Buffer.concat(chunks),
+      contentType: response.headers.get("content-type")?.split(";")[0].trim() || undefined,
+    };
   }
 
   /**

@@ -1,9 +1,12 @@
 // Turns one OpenMail `message.received` event into an OpenClaw agent turn.
 // The agent's reply is delivered back into the same email thread.
 import type { ChannelGatewayContext } from "openclaw/plugin-sdk/channel-contract";
+import type { ChannelIngressMonitorLifecycle } from "openclaw/plugin-sdk/channel-outbound";
+import { bindIngressLifecycleToReplyOptions } from "openclaw/plugin-sdk/channel-outbound";
 import type { PluginRuntime } from "openclaw/plugin-sdk/plugin-runtime";
 import { OPENMAIL_CHANNEL_ID, type ResolvedOpenMailAccount } from "./accounts.js";
-import { OpenMailApi } from "./openmail-api.js";
+import { stageInboundAttachments, type StagedMedia } from "./media.js";
+import { OpenMailApi, type OpenMailAttachment, type OpenMailMessage } from "./openmail-api.js";
 
 /** Shape of `message.received` on the OpenMail websocket (mirrors the webhook payload). */
 export type OpenMailMessageReceived = {
@@ -67,46 +70,112 @@ export function isSenderAllowed(account: ResolvedOpenMailAccount, address: strin
   });
 }
 
-export function buildAgentText(ev: OpenMailMessageReceived): string {
-  const m = ev.message;
-  const lines = [
-    `From: ${m.from}`,
-    m.to ? `To: ${m.to}` : undefined,
-    m.subject ? `Subject: ${m.subject}` : undefined,
-    `Thread: ${ev.thread_id}`,
+/** Per-attachment and total caps on inlined extracted text. */
+const PARSED_TEXT_PER_FILE = 8_000;
+const PARSED_TEXT_TOTAL = 24_000;
+
+export function buildAgentText(params: {
+  from: string;
+  to?: string | null;
+  subject?: string | null;
+  threadId: string;
+  messageId: string;
+  body: string;
+  attachments: OpenMailAttachment[];
+  staged: StagedMedia;
+}): string {
+  const header = [
+    `From: ${params.from}`,
+    params.to ? `To: ${params.to}` : undefined,
+    params.subject ? `Subject: ${params.subject}` : undefined,
+    `Thread: ${params.threadId}`,
   ].filter(Boolean) as string[];
-  if (m.attachments && m.attachments.length > 0) {
-    const names = m.attachments.map((a) => a.filename ?? a.id ?? "attachment");
-    lines.push(`Attachments: ${names.join(", ")}`);
-    lines.push(
-      `(read one with: openclaw openmail -- attachments text --message-id ${m.id} --filename "${names[0]}")`,
-    );
+
+  const sections: string[] = [];
+  if (params.attachments.length > 0) {
+    header.push(`Attachments: ${params.attachments.map((a) => a.filename).join(", ")}`);
+    if (params.staged.paths.length > 0) {
+      header.push(`(${params.staged.paths.length} attached as files you can open)`);
+    }
+    if (params.staged.skipped.length > 0) {
+      header.push(`(skipped, over the media size limit: ${params.staged.skipped.join(", ")})`);
+    }
+    let budget = PARSED_TEXT_TOTAL;
+    for (const att of params.attachments) {
+      const text = att.parsedText?.trim();
+      if (!text || budget <= 0) continue;
+      const slice = text.slice(0, Math.min(PARSED_TEXT_PER_FILE, budget));
+      budget -= slice.length;
+      sections.push(
+        `--- ${att.filename} (extracted text${slice.length < text.length ? ", truncated" : ""}) ---\n${slice}`,
+      );
+    }
+    const unread = params.attachments.filter((a) => !a.parsedText?.trim()).map((a) => a.filename);
+    if (unread.length > 0 && params.staged.paths.length === 0) {
+      header.push(
+        `(read one with: openclaw openmail -- attachments text --message-id ${params.messageId} --filename "${unread[0]}")`,
+      );
+    }
   }
+
   return [
     "New email. Whatever you write back is sent verbatim as the email body to the sender, in this thread: write only the email itself, no preamble or commentary. If you need to run a command first (e.g. to read an attachment), do it, then answer.",
     "",
-    lines.join("\n"),
+    header.join("\n"),
     "",
-    (m.body_text ?? "").trim(),
+    params.body.trim(),
+    ...sections.map((s) => `\n${s}`),
   ].join("\n");
 }
 
+export type DispatchOutcome =
+  | { kind: "dispatched" }
+  | { kind: "dropped"; reason: string };
+
+/**
+ * One event → one agent turn. Before the agent sees anything we re-fetch the
+ * message from the API: the websocket frame is a *hint*, the API record is
+ * the truth. That closes the spoofing hole where a forged frame names an
+ * allowed sender, and it also gives us server-extracted attachment text.
+ */
 export async function dispatchOpenMailMessage(params: {
   ctx: ChannelGatewayContext<ResolvedOpenMailAccount>;
   event: OpenMailMessageReceived;
   api: OpenMailApi;
-}): Promise<void> {
+  lifecycle?: ChannelIngressMonitorLifecycle;
+}): Promise<DispatchOutcome> {
   const { ctx, event, api } = params;
   const channelRuntime = ctx.channelRuntime as OpenMailChannelRuntime | undefined;
   const account = ctx.account;
-  if (!channelRuntime || !account.inboxId) return;
+  if (!channelRuntime || !account.inboxId) return { kind: "dropped", reason: "account not configured" };
+  const inboxId = account.inboxId;
 
-  const sender = parseAddress(event.message.from);
-  if (!isSenderAllowed(account, sender.address)) {
-    ctx.log?.info?.(
-      `openmail: drop mail from ${sender.address}: not in channels.openmail.allowFrom (add the address, a domain, or "*")`,
+  if (event.inbox_id && event.inbox_id !== inboxId) {
+    return { kind: "dropped", reason: `event is for inbox ${event.inbox_id}, this account is ${inboxId}` };
+  }
+
+  // Re-authorize against the API. Throws on transient errors so the durable
+  // queue retries; returns null only when OpenMail says the pair doesn't exist.
+  const message: OpenMailMessage | null = await api.findMessage(event.thread_id, event.message.id);
+  if (!message) {
+    return { kind: "dropped", reason: `message ${event.message.id} not found in thread ${event.thread_id}` };
+  }
+  if (message.direction === "outbound") return { kind: "dropped", reason: "own outbound message" };
+  const authoritativeFrom = message.fromAddr?.trim();
+  if (!authoritativeFrom) return { kind: "dropped", reason: "message has no sender" };
+
+  const sender = parseAddress(authoritativeFrom);
+  const claimed = parseAddress(event.message.from);
+  if (claimed.address !== sender.address) {
+    ctx.log?.warn?.(
+      `openmail: event claimed From ${claimed.address} but the API says ${sender.address}; using the API`,
     );
-    return;
+  }
+  if (!isSenderAllowed(account, sender.address)) {
+    return {
+      kind: "dropped",
+      reason: `${sender.address} is not in channels.openmail.allowFrom (add the address, a domain, or "*")`,
+    };
   }
 
   const route = channelRuntime.routing.resolveAgentRoute({
@@ -116,21 +185,50 @@ export async function dispatchOpenMailMessage(params: {
     peer: { kind: "direct", id: sender.address },
   });
 
+  const attachments = message.attachments ?? [];
+  let staged: StagedMedia = { paths: [], types: [], skipped: [] };
+  if (attachments.length > 0) {
+    try {
+      staged = await stageInboundAttachments({
+        api,
+        messageId: message.id,
+        attachments,
+        maxBytes: Math.floor(account.mediaMaxMb * 1024 * 1024),
+      });
+    } catch (err) {
+      // Attachments are a convenience; the mail itself still gets answered.
+      ctx.log?.warn?.(`openmail: could not stage attachments for ${message.id}: ${String(err)}`);
+    }
+  }
+
   const timestamp = event.occurred_at ? Date.parse(event.occurred_at) : Date.now();
-  const inboxId = account.inboxId;
-  const threadId = event.thread_id;
+  const threadId = message.threadId || event.thread_id;
   const replyTo = `openmail:${sender.address}`;
+  const body = message.bodyText ?? event.message.body_text ?? "";
+  const subject = message.subject ?? event.message.subject ?? null;
 
   await channelRuntime.inbound.run({
     channel: OPENMAIL_CHANNEL_ID,
     accountId: ctx.accountId,
     raw: event,
+    turnAdoptionLifecycle: params.lifecycle
+      ? bindIngressLifecycleToReplyOptions(params.lifecycle).turnAdoptionLifecycle
+      : undefined,
     adapter: {
       ingest: (raw) => ({
-        id: raw.message.id,
+        id: message.id,
         timestamp,
-        rawText: raw.message.body_text ?? "",
-        textForAgent: buildAgentText(raw),
+        rawText: body,
+        textForAgent: buildAgentText({
+          from: authoritativeFrom,
+          to: message.toAddr ?? raw.message.to,
+          subject,
+          threadId,
+          messageId: message.id,
+          body,
+          attachments,
+          staged,
+        }),
         textForCommands: "",
         raw,
       }),
@@ -141,12 +239,12 @@ export async function dispatchOpenMailMessage(params: {
           accountId: ctx.accountId,
           messageId: input.id,
           timestamp: input.timestamp,
-          from: `openmail:${sender.address}`,
+          from: replyTo,
           sender: { id: sender.address, name: sender.name },
           conversation: {
             kind: "direct",
             id: sender.address,
-            label: event.message.subject ?? sender.address,
+            label: subject ?? sender.address,
             threadId,
           },
           route: {
@@ -168,8 +266,12 @@ export async function dispatchOpenMailMessage(params: {
           extra: {
             OpenMailInboxId: inboxId,
             OpenMailThreadId: threadId,
-            OpenMailMessageId: event.message.id,
-            OpenMailSubject: event.message.subject ?? undefined,
+            OpenMailMessageId: message.id,
+            OpenMailSubject: subject ?? undefined,
+            MediaPath: staged.paths[0],
+            MediaPaths: staged.paths.length > 0 ? staged.paths : undefined,
+            MediaType: staged.types[0],
+            MediaTypes: staged.types.length > 0 ? staged.types : undefined,
           },
         });
         return {
@@ -198,4 +300,5 @@ export async function dispatchOpenMailMessage(params: {
       },
     },
   });
+  return { kind: "dispatched" };
 }

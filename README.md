@@ -58,9 +58,15 @@ closed until you open it:
   `allowNewThreads: true`. This also gates `openclaw message send --channel openmail`.
 - **Least-privilege key.** Only an inbox-scoped key is stored; it cannot list
   other inboxes, mint keys, or change policy.
-- **No silent drops.** A failed agent turn is retried (2s, 10s, 30s), then the
-  event is released for server replay; the cursor is persisted so a gateway
-  restart replays mail that arrived while it was down.
+- **Re-authorized replies.** The websocket frame is only a hint. Before the
+  agent sees anything, the message is re-fetched from the API and the
+  allowlist is re-run against the *API's* `From`; a forged frame naming an
+  allowed sender is dropped. Replies go to the verified address.
+- **No silent drops.** Installed from npm, events go through OpenClaw's durable
+  ingress queue: deduped by `event_id`, persisted before the agent runs,
+  retried with backoff, dead-lettered rather than lost. A path-linked dev
+  install falls back to in-memory retries (2s, 10s, 30s). Either way the
+  cursor is persisted, so a gateway restart replays what arrived while down.
 
 ## The bundled CLI skill
 
@@ -74,9 +80,21 @@ openclaw openmail --account sales -- send --to a@b.com --thread-id <id> --body "
 ```
 
 Credentials come from the channel config only; `--api-key`, `--base-url`,
-and `--state-path` are rejected, and proxy env vars are stripped. That is how
-the agent reads attachments (PDF, DOCX, XLSX, PPTX, images via OCR): the
-inbound notification names them and the skill says how to read them.
+and `--state-path` are rejected, and proxy env vars are stripped.
+
+## Attachments
+
+Inbound attachments reach the agent three ways, in order of preference:
+
+1. **Extracted text, inline.** OpenMail parses PDF, DOCX, XLSX, PPTX, CSV and
+   images (OCR) server-side; that text is appended to the notification
+   (capped at 8k chars per file, 24k total).
+2. **Staged files.** Anything without extracted text (images, archives) is
+   downloaded into OpenClaw's media store and handed over as `MediaPaths`, so a
+   vision-capable model sees the picture. Budget: `mediaMaxMb` per email
+   (default 20; `0` disables). Oversized files are skipped and named.
+3. **The CLI.** For anything else the notification says exactly what to run:
+   `openclaw openmail -- attachments text --message-id <id> --filename <name>`.
 
 ## Behaviour
 
@@ -87,12 +105,15 @@ inbound notification names them and the skill says how to read them.
   should say so.
 - Replies go to the original sender via `POST /v1/inboxes/{id}/send` with the
   thread id, so they land in-thread with a `Re:` subject and quoted original.
-- The agent can also start threads: `openclaw message send --channel openmail --to a@b.com "…"`.
-  The first line becomes the subject.
+- With `allowNewThreads: true` the agent can also start threads:
+  `openclaw message send --channel openmail --to a@b.com "…"`. The first line
+  becomes the subject.
 - Who may email the inbox is governed by OpenMail's correspondent policy
-  (server-side). `channels.openmail.dmPolicy` / `allowFrom` add a local filter
-  on top: `"open"` (default), `"allowlist"` with entries like
-  `"someone@x.com"` or `"@x.com"`, or `"disabled"`.
+  (server-side). `channels.openmail.dmPolicy` / `allowFrom` mirror it locally:
+  `"allowlist"` (default) with entries like `"someone@x.com"`, `"x.com"`,
+  `"@x.com"` or `"*.x.com"`; `"open"` (needs `"*"`); or `"disabled"`.
+- Mails from the same sender are processed in order; different senders run
+  in parallel.
 
 ## Config
 
@@ -100,12 +121,17 @@ inbound notification names them and the skill says how to read them.
 {
   "channels": {
     "openmail": {
-      "apiKey": "om_…",          // inbox-scoped
+      "apiKey": "om_…",          // inbox-scoped, or a SecretRef (below)
       "inboxId": "…",
       "dmPolicy": "allowlist",   // optional
       "allowFrom": ["@yourcompany.com"],
+      "allowNewThreads": false,  // default
+      "mediaMaxMb": 20,          // default
       "accounts": {
-        "sales": { "apiKey": "om_…", "inboxId": "…" }
+        "sales": {
+          "apiKey": { "source": "env", "provider": "default", "id": "OPENMAIL_SALES_KEY" },
+          "inboxId": "…"
+        }
       }
     }
   }
@@ -113,13 +139,14 @@ inbound notification names them and the skill says how to read them.
 ```
 
 `OPENMAIL_API_KEY` / `OPENMAIL_INBOX_ID` / `OPENMAIL_BASE_URL` work as env
-fallbacks for the default account.
+fallbacks for the default account. `apiKey` accepts OpenClaw SecretRefs
+(`env`, `file`, `exec`, `store` providers); the host resolves them before the
+channel starts, so the key never sits in `openclaw.json`.
 
 ## Not yet
 
 - Notify mode (summarise to your chat channel instead of auto-replying).
 - OpenClaw pairing flow for unknown senders.
-- Secret refs (`apiKey: { source: "env", ... }`); plain strings only for now.
 - If the config write fails after a key was minted, the key is left behind.
   Harmless (10-key cap per inbox), visible in the dashboard.
 
@@ -127,10 +154,18 @@ fallbacks for the default account.
 
 ```bash
 pnpm install
-pnpm build                       # tsc; needs NODE_OPTIONS=--max-old-space-size=12288 (SDK types are large)
+pnpm build            # tsc; needs NODE_OPTIONS=--max-old-space-size=12288 (SDK types are large)
+pnpm test             # vitest: allowlist, provisioning, re-auth, ingress, CLI guards
+pnpm manifest         # regenerate openclaw.plugin.json + package.json#openclaw from src
+pnpm validate-plugin  # install into a throwaway OpenClaw host and assert it loads
+pnpm check            # all of the above; also runs on publish and in CI
 openclaw plugins install --link --force --accept-capabilities .
 openclaw gateway restart
 ```
 
-Compiles against `openclaw@2026.9.2`; `openclaw.compat.pluginApi` in
-`package.json` pins the supported host range.
+`openclaw.plugin.json` and the `openclaw` block of `package.json` are
+**generated** from `src/config-schema.ts` and `src/setup.ts`; edit those, then
+`pnpm manifest`. CI fails on a stale manifest.
+
+Compiles against `openclaw@2026.9.2` (pinned in `devDependencies`); the
+generated `compat` / `install.minHostVersion` follow that pin.
