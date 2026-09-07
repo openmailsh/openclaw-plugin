@@ -161,9 +161,6 @@
               "tool"
             ]
           },
-          "allowNewThreads": {
-            "type": "boolean"
-          },
           "mediaMaxMb": {
             "type": "number",
             "minimum": 0,
@@ -321,9 +318,6 @@
                     "tool"
                   ]
                 },
-                "allowNewThreads": {
-                  "type": "boolean"
-                },
                 "mediaMaxMb": {
                   "type": "number",
                   "minimum": 0,
@@ -368,10 +362,6 @@
         "mode": {
           "label": "Mode",
           "help": "channel (default): mail wakes the agent and it replies in-thread. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask."
-        },
-        "allowNewThreads": {
-          "label": "Allow new threads",
-          "help": "Off (default): the agent can only reply in-thread. On: it may email any address."
         },
         "mediaMaxMb": {
           "label": "Attachment budget (MB)",
