@@ -7,7 +7,7 @@
     "type": "git",
     "url": "https://github.com/openmailsh/openclaw-plugin"
   },
-  "homepage": "https://docs.openmail.sh/channels/openclaw",
+  "homepage": "https://docs.openmail.sh/integrations/openclaw",
   "type": "module",
   "files": [
     "dist",
