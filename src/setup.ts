@@ -25,6 +25,8 @@ import {
 type OpenMailSetupInput = ChannelSetupInput & {
   apiKey?: string;
   inboxId?: string;
+  /** Pod id or clientId. Makes the account cover every inbox in the pod. */
+  pod?: string;
   baseUrl?: string;
   mailboxName?: string;
   displayName?: string;
@@ -32,6 +34,20 @@ type OpenMailSetupInput = ChannelSetupInput & {
   allowFrom?: string[] | string;
   mode?: OpenMailMode;
 };
+
+function describeMode(mode: OpenMailMode, where: string): string {
+  if (mode === "notify") {
+    return `Mode: notify. New mail at ${where} is summarised to you on your main chat; the agent does not reply by itself.`;
+  }
+  if (mode === "tool") return `Mode: tool. Nothing inbound wakes the agent; it uses ${where} only when you ask.`;
+  return `Mode: channel. Mail to ${where} wakes the agent and it replies in the same thread.`;
+}
+
+function describeAllowFrom(allowFrom: string[], where: string): string {
+  return allowFrom.length > 0
+    ? `Only ${allowFrom.join(", ")} reach the agent (channels.openmail.allowFrom). Server-side allow/block rules are managed in the OpenMail console or CLI.`
+    : `Anyone can email ${where} and reach the agent. To restrict senders, set --allow-from here, or manage allow/block rules in the OpenMail console or CLI.`;
+}
 
 /** "a@x.com, y.com" | ["a@x.com","y.com"] -> lowercased, deduped list. */
 export function normalizeAllowFrom(raw: string[] | string | undefined): string[] {
@@ -54,13 +70,23 @@ const baseSetupAdapter = createPatchedAccountSetupAdapter({
   channelKey: OPENMAIL_CHANNEL_ID,
   buildPatch: (input) => {
     const i = input as OpenMailSetupInput;
-    const patch: Record<string, string | string[]> = {};
+    const patch: Record<string, unknown> = {};
     const apiKey = normalizeOptionalString(i.apiKey);
     const inboxId = normalizeOptionalString(i.inboxId);
+    // `pod` is the CLI input; prepareAccountConfigInput resolves it to `podId`.
+    const podId = normalizeOptionalString((i as { podId?: string }).podId);
     const baseUrl = normalizeOptionalString(i.baseUrl);
     const allowFrom = normalizeAllowFrom(i.allowFrom);
     if (apiKey) patch.apiKey = apiKey;
-    if (inboxId) patch.inboxId = inboxId;
+    // One shape per account: switching clears the other id (undefined is
+    // dropped when the config is written).
+    if (podId) {
+      patch.podId = podId;
+      patch.inboxId = undefined;
+    } else if (inboxId) {
+      patch.inboxId = inboxId;
+      patch.podId = undefined;
+    }
     if (baseUrl) patch.baseUrl = baseUrl;
     if (allowFrom.length > 0) {
       patch.allowFrom = allowFrom;
@@ -125,6 +151,44 @@ export async function provisionOpenMailAccount(params: {
   return { inboxId: inbox.id, apiKey: minted.token, address: inbox.address, created };
 }
 
+/**
+ * Pod shape: the account covers every inbox in one pod.
+ *
+ *   account key  -> mint a pod-scoped key for `pod`, store THAT
+ *   pod key      -> must be the key for `pod` (GET /v1/pods returns exactly it);
+ *                   stored as-is. Mint returns 403 for such keys.
+ *   inbox key    -> cannot see pods; refused.
+ */
+export async function provisionOpenMailPod(params: {
+  api: OpenMailApi;
+  accountId: string;
+  pod: string;
+  log: (line: string) => void;
+}): Promise<{ podId: string; apiKey?: string; name: string; inboxCount: number }> {
+  const { api, accountId, pod, log } = params;
+  const visible = await api.listPods();
+  const target = visible.find((p) => p.id === pod || p.clientId === pod);
+  if (!target) {
+    if (visible.length === 0) {
+      throw new Error(
+        "This key cannot see any pod. Use an account key (to mint a pod key) or the pod's own key.",
+      );
+    }
+    const list = visible.map((p) => `  ${p.id}${p.clientId ? `  (${p.clientId})` : ""}  ${p.name ?? ""}`).join("\n");
+    throw new Error(`Pod "${pod}" is not visible to this key. Pods it can see:\n${list}`);
+  }
+  const name = target.name ?? target.clientId ?? target.id;
+  const inboxCount = (await api.listInboxes()).filter((i) => i.podId === target.id).length;
+  const minted = await api.mintPodKey(target.id, `openclaw:${accountId}`);
+  if (!minted) {
+    // 403: already a pod key. Since it can see `target`, it is the key for it.
+    log(`Using pod ${name} (${target.id}), ${inboxCount} inbox(es).`);
+    return { podId: target.id, name, inboxCount };
+  }
+  log(`Minted a pod-scoped API key for ${name} (${target.id}), ${inboxCount} inbox(es); the account key you passed is not stored.`);
+  return { podId: target.id, apiKey: minted.token, name, inboxCount };
+}
+
 function ownInboxId(cfg: OpenClawConfig, accountId: string): string | undefined {
   const section = (cfg.channels?.[OPENMAIL_CHANNEL_ID] ?? {}) as {
     inboxId?: string;
@@ -146,6 +210,25 @@ export const setupAdapter: typeof baseSetupAdapter = {
 
     const baseUrl = normalizeOptionalString(i.baseUrl) ?? current.baseUrl;
     const api = new OpenMailApi(baseUrl, apiKey);
+    const mode: OpenMailMode = i.mode && OPENMAIL_MODES.includes(i.mode) ? i.mode : current.mode;
+    const allowFrom = normalizeAllowFrom(i.allowFrom);
+
+    const pod = normalizeOptionalString(i.pod) ?? (current.scope === "pod" ? current.podId ?? undefined : undefined);
+    if (pod) {
+      const result = await provisionOpenMailPod({ api, accountId, pod, log: (line) => runtime.log?.(line) });
+      runtime.log?.(describeMode(mode, `any inbox in pod ${result.name}`));
+      runtime.log?.(describeAllowFrom(allowFrom, `the pod's inboxes`));
+      runtime.log?.(
+        `The agent can create more inboxes in this pod (openclaw openmail -- inbox create --mailbox-name <name>); they join the channel automatically.`,
+      );
+      return {
+        ...i,
+        podId: result.podId,
+        inboxId: undefined,
+        ...(result.apiKey ? { apiKey: result.apiKey } : {}),
+      } as typeof input;
+    }
+
     const result = await provisionOpenMailAccount({
       api,
       accountId,
@@ -158,20 +241,8 @@ export const setupAdapter: typeof baseSetupAdapter = {
       },
       log: (line) => runtime.log?.(line),
     });
-    const mode: OpenMailMode = i.mode && OPENMAIL_MODES.includes(i.mode) ? i.mode : current.mode;
-    runtime.log?.(
-      mode === "notify"
-        ? `Mode: notify. New mail at ${result.address} is summarised to you on your main chat; the agent does not reply by itself.`
-        : mode === "tool"
-          ? `Mode: tool. Nothing inbound wakes the agent; it uses ${result.address} only when you ask.`
-          : `Mode: channel. Mail to ${result.address} wakes the agent and it replies in the same thread.`,
-    );
-    const allowFrom = normalizeAllowFrom(i.allowFrom);
-    runtime.log?.(
-      allowFrom.length > 0
-        ? `Only ${allowFrom.join(", ")} reach the agent (channels.openmail.allowFrom). Server-side allow/block rules are managed in the OpenMail console or CLI.`
-        : `Anyone can email ${result.address} and reach the agent. To restrict senders, set --allow-from here, or manage allow/block rules in the OpenMail console or CLI.`,
-    );
+    runtime.log?.(describeMode(mode, result.address));
+    runtime.log?.(describeAllowFrom(allowFrom, result.address));
     return {
       ...i,
       inboxId: result.inboxId,
@@ -199,6 +270,14 @@ export const openmailSetupContract = defineChannelSetupContract({
     inboxId: {
       kind: "string",
       cli: { flags: "--inbox-id <id>", description: "Use an existing inbox (only needed when the key can see several)" },
+    },
+    pod: {
+      kind: "string",
+      cli: {
+        flags: "--pod <id>",
+        description:
+          "Cover a whole pod instead of one inbox: every inbox in it, including ones the agent creates later. Pod id or clientId; a pod-scoped key is minted from an account key.",
+      },
     },
     mailboxName: {
       kind: "string",

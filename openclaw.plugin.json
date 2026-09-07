@@ -131,6 +131,10 @@
             "type": "string",
             "minLength": 1
           },
+          "podId": {
+            "type": "string",
+            "minLength": 1
+          },
           "baseUrl": {
             "type": "string",
             "format": "uri"
@@ -287,6 +291,10 @@
                   "type": "string",
                   "minLength": 1
                 },
+                "podId": {
+                  "type": "string",
+                  "minLength": 1
+                },
                 "baseUrl": {
                   "type": "string",
                   "format": "uri"
@@ -337,7 +345,13 @@
           "sensitive": true
         },
         "inboxId": {
-          "label": "Inbox id"
+          "label": "Inbox id",
+          "help": "One inbox. Leave empty when podId is set."
+        },
+        "podId": {
+          "label": "Pod id",
+          "help": "Whole pod: every inbox in it, including ones the agent creates later. Needs a pod-scoped key.",
+          "advanced": true
         },
         "baseUrl": {
           "label": "API base URL",

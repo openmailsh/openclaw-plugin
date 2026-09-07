@@ -16,6 +16,10 @@ const FATAL_CLOSE_CODES = new Set([4001, 4003, 4008]);
 const MIN_STABLE_MS = 60_000;
 const MAX_BACKOFF_MS = 30_000;
 const PING_INTERVAL_MS = 30_000;
+// Pod scope: the server expands subscribe-all to the pod's inboxes at
+// subscribe time, so inboxes created later (by the agent, say) only stream
+// after a re-subscribe. Cheap, so do it on a timer.
+const RESUBSCRIBE_INTERVAL_MS = 60_000;
 
 export function toWsUrl(baseUrl: string): string {
   return `${baseUrl.replace(/^http:\/\//, "ws://").replace(/^https:\/\//, "wss://")}/v1/ws`;
@@ -49,16 +53,26 @@ export async function startOpenMailGatewayAccount(
     await waitUntilAbort(ctx.abortSignal);
     return;
   }
-  if (!account.apiKey || !account.inboxId) {
-    throw new Error(`OpenMail account "${ctx.accountId}" needs apiKey and inboxId.`);
+  if (!account.apiKey || !(account.inboxId || account.podId)) {
+    throw new Error(`OpenMail account "${ctx.accountId}" needs apiKey and inboxId or podId.`);
   }
   if (!ctx.channelRuntime) {
     throw new Error("OpenMail requires OpenClaw channel runtime support. Update OpenClaw and retry.");
   }
 
   const api = new OpenMailApi(account.baseUrl, account.apiKey);
-  const inbox = await api.getInbox(account.inboxId);
-  ctx.log?.info?.(`[${ctx.accountId}] OpenMail inbox ${inbox.address}`);
+  if (account.scope === "pod" && account.podId) {
+    const pod = await api.getPod(account.podId);
+    const inboxes = (await api.listInboxes()).filter((i) => i.podId === pod.id);
+    ctx.log?.info?.(
+      `[${ctx.accountId}] OpenMail pod ${pod.name ?? pod.id}: ${inboxes.length} inbox(es)${
+        inboxes.length ? ` (${inboxes.map((i) => i.address).join(", ")})` : ""
+      }`,
+    );
+  } else if (account.inboxId) {
+    const inbox = await api.getInbox(account.inboxId);
+    ctx.log?.info?.(`[${ctx.accountId}] OpenMail inbox ${inbox.address}`);
+  }
 
   const signal = ctx.abortSignal;
   let retries = 0;
@@ -137,7 +151,7 @@ function connectOnce(params: {
   ctx: ChannelGatewayContext<ResolvedOpenMailAccount>;
   wsUrl: string;
   apiKey: string;
-  inboxId: string;
+  inboxId: string | null;
   lastEventId: () => string | undefined;
   onEvent: (event: OpenMailMessageReceived) => Promise<void>;
 }): Promise<string | undefined> {
@@ -148,6 +162,8 @@ function connectOnce(params: {
     });
     let settled = false;
     let ping: NodeJS.Timeout | undefined;
+    let resubscribe: NodeJS.Timeout | undefined;
+    let subscribedCount = -1;
     // Admit in receive order so the cursor never skips ahead of an event.
     let eventTail: Promise<void> = Promise.resolve();
 
@@ -155,6 +171,7 @@ function connectOnce(params: {
       if (settled) return;
       settled = true;
       if (ping) clearInterval(ping);
+      if (resubscribe) clearInterval(resubscribe);
       ctx.abortSignal?.removeEventListener("abort", onAbort);
       ws.removeAllListeners();
       try {
@@ -172,18 +189,27 @@ function connectOnce(params: {
     const onAbort = () => finish();
     ctx.abortSignal?.addEventListener("abort", onAbort, { once: true });
 
-    ws.on("open", () => {
+    const sendSubscribe = (withCursor: boolean) => {
       const subscribe: Record<string, unknown> = {
         type: "subscribe",
-        inbox_ids: [params.inboxId],
         event_types: ["message.received"],
       };
-      const last = params.lastEventId();
+      if (params.inboxId) subscribe.inbox_ids = [params.inboxId];
+      const last = withCursor ? params.lastEventId() : undefined;
       if (last) subscribe.last_event_id = last;
       ws.send(JSON.stringify(subscribe));
+    };
+
+    ws.on("open", () => {
+      sendSubscribe(true);
       ping = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "ping" }));
       }, PING_INTERVAL_MS);
+      if (!params.inboxId) {
+        resubscribe = setInterval(() => {
+          if (ws.readyState === WebSocket.OPEN) sendSubscribe(false);
+        }, RESUBSCRIBE_INTERVAL_MS);
+      }
       ctx.setStatus(channelReadyPatch({ accountId: ctx.accountId, lastStartAt: Date.now() }));
       ctx.log?.info?.("openmail: websocket connected");
     });
@@ -197,6 +223,14 @@ function connectOnce(params: {
       }
       if (payload.type === "error") {
         ctx.log?.warn?.(`openmail: server error: ${String(payload.message)}`);
+        return;
+      }
+      if (payload.type === "subscribed") {
+        const ids = Array.isArray(payload.inbox_ids) ? payload.inbox_ids.length : 0;
+        if (!params.inboxId && ids !== subscribedCount) {
+          if (subscribedCount >= 0) ctx.log?.info?.(`openmail: pod now streams ${ids} inbox(es)`);
+          subscribedCount = ids;
+        }
         return;
       }
       if (payload.event !== "message.received") return;

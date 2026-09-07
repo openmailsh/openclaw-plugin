@@ -26,7 +26,8 @@ Get a key from [app.openmail.sh](https://app.openmail.sh) or with the
 | an inbox-scoped key | stored as-is; that inbox is the channel |
 | an account or pod key | picks your inbox (or **creates one if you have none**), mints an inbox-scoped key for it, stores only that. The broad key is never written to `openclaw.json`. |
 | `--mailbox-name sales` | creates `sales@omail.sh` (add `--display-name "Sales bot"` for the sender name) |
-| `--inbox-id <id>` | uses that existing inbox — needed when the key can see several |
+| `--inbox-id <id>` | uses that existing inbox, needed when the key can see several |
+| `--pod <id>` | covers a whole pod instead of one inbox; see [Several inboxes](#several-inboxes) |
 | `--mode notify` / `--mode tool` | how inbound mail reaches the agent; see [Modes](#modes). Default `channel`. |
 | `--allow-from a@x.com,x.com` | optional local filter: only these senders (addresses, domains, `*.x.com`) reach the agent. **Default: everyone** the inbox receives from. Server-side allow/block rules are yours to manage in the OpenMail console or CLI; the plugin never writes them. |
 
@@ -35,7 +36,9 @@ account is a no-op.
 
 ## Several inboxes
 
-One OpenClaw account per inbox. Each gets its own websocket, status line, and
+Two ways.
+
+**One account per inbox.** Each gets its own key, websocket, status line, and
 can be bound to a different agent:
 
 ```bash
@@ -45,6 +48,27 @@ openclaw channels status
 # - OpenMail support: enabled, configured, running, connected
 # - OpenMail sales:   enabled, configured, running, connected
 ```
+
+**One account per pod.** A pod is an OpenMail group of inboxes. The account
+holds a pod-scoped key and covers every inbox in it, including ones the agent
+creates later:
+
+```bash
+openclaw channels add --channel openmail --account outreach --api-key <account key> --pod outreach
+# Minted a pod-scoped API key for outreach (pod_…), 2 inbox(es); the account key you passed is not stored.
+```
+
+Then, at runtime, the agent (or a subagent it hands the inbox id to) can:
+
+```bash
+openclaw openmail --account outreach -- inbox create --mailbox-name outreach-3
+openclaw openmail --account outreach -- send --inbox-id <id> --thread-id <thr> --to … --body …
+```
+
+New inboxes stream inbound mail within a minute (the gateway re-subscribes on
+a timer). Each `(inbox, sender)` pair is its own conversation, replies go out
+from the inbox that received the mail, and `--pod` accepts the pod id or its
+`clientId`. Trade-off: the stored key can read every inbox in the pod, not one.
 
 ## Security defaults
 
@@ -142,7 +166,7 @@ Re-authorization and `allowFrom` apply in every mode.
   "channels": {
     "openmail": {
       "apiKey": "om_…",          // inbox-scoped, or a SecretRef (below)
-      "inboxId": "…",
+      "inboxId": "…",             // or "podId": "…" for a whole pod
       "mode": "channel",         // default; or "notify" / "tool"
       "allowFrom": ["@yourcompany.com"],  // optional local filter; default: everyone
       "allowNewThreads": false,  // default

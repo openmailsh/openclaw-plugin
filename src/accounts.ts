@@ -1,4 +1,6 @@
-// Account resolution: each OpenClaw "account" is one OpenMail inbox.
+// Account resolution. An OpenClaw "account" is either one OpenMail inbox
+// (inboxId + inbox-scoped key) or a whole pod (podId + pod-scoped key): every
+// inbox in the pod, including ones created later, flows through one account.
 import { createAccountListHelpers } from "openclaw/plugin-sdk/account-helpers";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/account-id";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
@@ -27,7 +29,10 @@ export type OpenMailAccountConfig = {
   enabled?: boolean;
   /** Literal key or a SecretRef ({ source: "env" | "store" | "file", provider, id }). */
   apiKey?: SecretInput;
+  /** One inbox. Mutually exclusive with podId. */
   inboxId?: string;
+  /** Whole pod: all its inboxes, present and future. Needs a pod-scoped key. */
+  podId?: string;
   baseUrl?: string;
   dmPolicy?: string;
   allowFrom?: string[];
@@ -40,13 +45,18 @@ export type OpenMailAccountConfig = {
   defaultAccount?: string;
 };
 
+export type OpenMailScope = "inbox" | "pod";
+
 export type ResolvedOpenMailAccount = {
   accountId: string;
   name: string | undefined;
   enabled: boolean;
   configured: boolean;
   apiKey: string | null;
+  /** "pod" when podId is set and inboxId is not. */
+  scope: OpenMailScope;
   inboxId: string | null;
+  podId: string | null;
   baseUrl: string;
   dmPolicy: string | undefined;
   allowFrom: string[];
@@ -63,8 +73,8 @@ const {
   normalizeAccountId,
   omitKeys: ["defaultAccount"],
   implicitDefaultAccount: {
-    channelKeys: ["apiKey", "inboxId"],
-    envVars: ["OPENMAIL_API_KEY", "OPENMAIL_INBOX_ID"],
+    channelKeys: ["apiKey", "inboxId", "podId"],
+    envVars: ["OPENMAIL_API_KEY", "OPENMAIL_INBOX_ID", "OPENMAIL_POD_ID"],
   },
 });
 
@@ -111,6 +121,18 @@ export function resolveOpenMailAccount(params: {
     normalizeOptionalString(merged.inboxId) ??
     (isDefault ? normalizeOptionalString(process.env.OPENMAIL_INBOX_ID) : undefined) ??
     null;
+  const podId =
+    normalizeOptionalString(merged.podId) ??
+    (isDefault ? normalizeOptionalString(process.env.OPENMAIL_POD_ID) : undefined) ??
+    null;
+  // Named accounts inherit root fields, so a pod account under a root inbox
+  // (or vice versa) sees both ids. The account's own entry decides; the
+  // narrower inbox claim wins only when the account itself set neither.
+  const own = (channel?.accounts?.[accountId] ?? (isDefault ? channel : undefined)) ?? {};
+  const ownInbox = normalizeOptionalString(own.inboxId);
+  const ownPod = normalizeOptionalString(own.podId);
+  const scope: OpenMailScope =
+    ownInbox ? "inbox" : ownPod ? "pod" : inboxId ? "inbox" : podId ? "pod" : "inbox";
   const baseUrl = (
     normalizeOptionalString(merged.baseUrl) ??
     normalizeOptionalString(process.env.OPENMAIL_BASE_URL) ??
@@ -126,9 +148,11 @@ export function resolveOpenMailAccount(params: {
     name: normalizeOptionalString(merged.name),
     enabled: channel?.enabled !== false && merged.enabled !== false,
     // A SecretRef counts as configured even before the host resolves it.
-    configured: Boolean((apiKey || hasConfiguredSecretInput(merged.apiKey)) && inboxId),
+    configured: Boolean((apiKey || hasConfiguredSecretInput(merged.apiKey)) && (inboxId || podId)),
     apiKey,
-    inboxId,
+    scope,
+    inboxId: scope === "inbox" ? inboxId : null,
+    podId: scope === "pod" ? podId : null,
     baseUrl,
     dmPolicy: normalizeOptionalString(merged.dmPolicy),
     allowFrom: Array.isArray(merged.allowFrom) ? merged.allowFrom.map(String) : [],

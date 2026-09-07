@@ -27,8 +27,28 @@ openclaw openmail -- <command> [flags]
 ```
 
 Keep the `--`. Use `--json` on any command for machine-readable output. The
-key is inbox-scoped: you can read and send from this agent's inbox only.
-Several inboxes are configured? Add `--account <id>` before the `--`.
+key is scoped to this agent's inbox, or to its pod (a group of inboxes).
+Several accounts are configured? Add `--account <id>` before the `--`.
+
+## Pod accounts: many inboxes, one key
+
+If inbound mail shows an `Inbox:` line, this account covers a whole pod.
+Pass `--inbox-id` on `send`, `threads list` and `messages list` so the right
+inbox is used; replies must go from the inbox that received the mail.
+
+You can create more inboxes in the pod when a task calls for it (one per
+campaign, one per subagent, a throwaway for a signup). They start receiving
+mail within a minute, no restart needed:
+
+```bash
+openclaw openmail -- inbox create --mailbox-name research-3 --display-name "Research" --json
+openclaw openmail -- inbox list --json
+```
+
+Hand a subagent the inbox id, not a key; it uses the same commands with
+`--inbox-id`. More inboxes on the shared `omail.sh` domain do not add sending
+reputation; for real outreach the user needs a verified custom domain on the
+pod (`domain add`, then `inbox create --domain`).
 
 ## Replying (most common)
 
@@ -54,9 +74,9 @@ openclaw openmail -- send --to "person@example.com" --subject "Report" --body "<
 `--body` is plain text or HTML (detected). `--attach <path>` is repeatable.
 The response has `messageId` and `threadId`; keep `threadId` to continue later.
 
-New threads may be disabled by the channel config (`allowNewThreads: false`,
-the default). If sending fails with a reply-only error, tell the user; do not
-work around it.
+New threads are off unless the channel config sets `allowNewThreads: true`.
+If sending fails with a reply-only error, tell the user; do not work around
+it.
 
 ## Reading mail
 

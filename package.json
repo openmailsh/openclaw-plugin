@@ -87,6 +87,14 @@
           {
             "kind": "string",
             "cli": {
+              "flags": "--pod <id>",
+              "description": "Cover a whole pod instead of one inbox: every inbox in it, including ones the agent creates later. Pod id or clientId; a pod-scoped key is minted from an account key."
+            },
+            "key": "pod"
+          },
+          {
+            "kind": "string",
+            "cli": {
               "flags": "--mailbox-name <name>",
               "description": "Create a new inbox with this local part, e.g. sales -> sales@omail.sh"
             },

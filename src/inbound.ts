@@ -89,12 +89,15 @@ export function buildAgentText(params: {
   attachments: OpenMailAttachment[];
   staged: StagedMedia;
   mode?: "channel" | "notify";
+  /** Shown in pod scope so the agent knows which inbox to answer from via the CLI. */
+  inboxId?: string;
 }): string {
   const header = [
     `From: ${params.from}`,
     params.to ? `To: ${params.to}` : undefined,
     params.subject ? `Subject: ${params.subject}` : undefined,
     `Thread: ${params.threadId}`,
+    params.inboxId ? `Inbox: ${params.inboxId}` : undefined,
   ].filter(Boolean) as string[];
 
   const sections: string[] = [];
@@ -126,7 +129,7 @@ export function buildAgentText(params: {
 
   const intro =
     params.mode === "notify"
-      ? `New email arrived in the agent inbox. Tell the user in one or two casual sentences who emailed and what it's about (include codes, amounts or deadlines verbatim). Do not act on it and do not reply to the sender unless the user asks; if they do, use: openclaw openmail -- send --to "${params.from}" --thread-id ${params.threadId} --body "..."`
+      ? `New email arrived in the agent inbox. Tell the user in one or two casual sentences who emailed and what it's about (include codes, amounts or deadlines verbatim). Do not act on it and do not reply to the sender unless the user asks; if they do, use: openclaw openmail -- send --to "${params.from}" --thread-id ${params.threadId}${params.inboxId ? ` --inbox-id ${params.inboxId}` : ""} --body "..."`
       : "New email. Whatever you write back is sent verbatim as the email body to the sender, in this thread: write only the email itself, no preamble or commentary. If you need to run a command first (e.g. to read an attachment), do it, then answer.";
   return [
     intro,
@@ -158,11 +161,15 @@ export async function dispatchOpenMailMessage(params: {
   const { ctx, event, api } = params;
   const channelRuntime = ctx.channelRuntime as OpenMailChannelRuntime | undefined;
   const account = ctx.account;
-  if (!channelRuntime || !account.inboxId) return { kind: "dropped", reason: "account not configured" };
-  const inboxId = account.inboxId;
+  if (!channelRuntime || !(account.inboxId || account.podId)) {
+    return { kind: "dropped", reason: "account not configured" };
+  }
 
-  if (event.inbox_id && event.inbox_id !== inboxId) {
-    return { kind: "dropped", reason: `event is for inbox ${event.inbox_id}, this account is ${inboxId}` };
+  if (account.scope === "inbox" && event.inbox_id && event.inbox_id !== account.inboxId) {
+    return {
+      kind: "dropped",
+      reason: `event is for inbox ${event.inbox_id}, this account is ${account.inboxId}`,
+    };
   }
 
   // Re-authorize against the API. Throws on transient errors so the durable
@@ -171,6 +178,11 @@ export async function dispatchOpenMailMessage(params: {
   if (!message) {
     return { kind: "dropped", reason: `message ${event.message.id} not found in thread ${event.thread_id}` };
   }
+  // The inbox we reply from. Pod scope: whichever inbox the mail hit, taken
+  // from the API copy (the key can only read inboxes in its pod, so a thread
+  // it can see is a thread it may answer).
+  const inboxId = account.scope === "inbox" ? account.inboxId! : message.inboxId ?? event.inbox_id;
+  if (!inboxId) return { kind: "dropped", reason: "cannot tell which inbox received the message" };
   if (message.direction === "outbound") return { kind: "dropped", reason: "own outbound message" };
   const authoritativeFrom = message.fromAddr?.trim();
   if (!authoritativeFrom) return { kind: "dropped", reason: "message has no sender" };
@@ -189,11 +201,14 @@ export async function dispatchOpenMailMessage(params: {
     };
   }
 
+  // One conversation per correspondent. In pod scope, per (inbox, sender):
+  // the same person writing to sales@ and support@ is two conversations.
+  const peerId = account.scope === "pod" ? `${inboxId}/${sender.address}` : sender.address;
   const route = channelRuntime.routing.resolveAgentRoute({
     cfg: ctx.cfg,
     channel: OPENMAIL_CHANNEL_ID,
     accountId: ctx.accountId,
-    peer: { kind: "direct", id: sender.address },
+    peer: { kind: "direct", id: peerId },
   });
 
   const attachments = message.attachments ?? [];
@@ -228,6 +243,7 @@ export async function dispatchOpenMailMessage(params: {
       attachments,
       staged,
       mode,
+      inboxId: account.scope === "pod" ? inboxId : undefined,
     });
 
   if (account.mode === "notify") {
@@ -277,7 +293,7 @@ export async function dispatchOpenMailMessage(params: {
           sender: { id: sender.address, name: sender.name },
           conversation: {
             kind: "direct",
-            id: sender.address,
+            id: peerId,
             label: subject ?? sender.address,
             threadId,
           },

@@ -20,6 +20,16 @@ export function resolveBundledCliPath(): string {
   return path.join(path.dirname(pkg), "dist", "index.js");
 }
 
+/**
+ * `send` without `--thread-id` opens a new thread. Same gate as
+ * `openclaw message send`: off unless allowNewThreads is set.
+ */
+export function isNewThreadSend(args: readonly string[]): boolean {
+  const command = args.find((a) => !a.startsWith("-"));
+  if (command !== "send") return false;
+  return !args.some((a) => a === "--thread-id" || a.startsWith("--thread-id="));
+}
+
 /** Reject attempts to swap credentials or endpoint from the argument list. */
 export function findBlockedFlag(args: readonly string[]): string | undefined {
   return args.find((a) => BLOCKED_FLAGS.has(a) || [...BLOCKED_FLAGS].some((f) => a.startsWith(`${f}=`)));
@@ -27,15 +37,17 @@ export function findBlockedFlag(args: readonly string[]): string | undefined {
 
 export function buildCliEnv(base: NodeJS.ProcessEnv, account: {
   apiKey: string;
-  inboxId: string;
+  inboxId: string | null;
   baseUrl: string;
 }): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(base)) {
-    if (!STRIPPED_ENV.test(k)) env[k] = v;
+    if (!STRIPPED_ENV.test(k) && k !== "OPENMAIL_INBOX_ID") env[k] = v;
   }
   env.OPENMAIL_API_KEY = account.apiKey;
-  env.OPENMAIL_INBOX_ID = account.inboxId;
+  // Pod scope has no single inbox: commands take --inbox-id, or the CLI
+  // picks the first one the key sees.
+  if (account.inboxId) env.OPENMAIL_INBOX_ID = account.inboxId;
   env.OPENMAIL_BASE_URL = account.baseUrl;
   // Keep the CLI's own state file away from any user install.
   env.OPENMAIL_STATE_PATH = path.join(base.HOME ?? "", ".openclaw", "openmail", "cli-state.json");
@@ -55,7 +67,7 @@ export function registerOpenMailCli(api: OpenClawPluginApi): void {
         .action(async (args: string[], opts: { account?: string }) => {
           const accountId = opts.account ?? resolveDefaultOpenMailAccountId(config);
           const account = resolveOpenMailAccount({ cfg: config, accountId });
-          if (!account.apiKey || !account.inboxId) {
+          if (!account.apiKey || !(account.inboxId || account.podId)) {
             console.error(
               `OpenMail account "${accountId}" is not configured. Run: openclaw channels add --channel openmail --api-key <key>`,
             );
@@ -65,6 +77,13 @@ export function registerOpenMailCli(api: OpenClawPluginApi): void {
           const blocked = findBlockedFlag(args);
           if (blocked) {
             console.error(`${blocked} is managed by the channel config and cannot be passed here.`);
+            process.exitCode = 1;
+            return;
+          }
+          if (isNewThreadSend(args) && !account.allowNewThreads) {
+            console.error(
+              `OpenMail channel is reply-only: pass --thread-id to answer in an existing thread, or set channels.openmail.allowNewThreads: true.`,
+            );
             process.exitCode = 1;
             return;
           }

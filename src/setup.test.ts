@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { OpenMailApi, OpenMailInbox } from "./openmail-api.js";
-import { normalizeAllowFrom, provisionOpenMailAccount, setupAdapter } from "./setup.js";
+import { normalizeAllowFrom, provisionOpenMailAccount, provisionOpenMailPod, setupAdapter } from "./setup.js";
 import { resolveOpenMailAccount } from "./accounts.js";
 
 describe("normalizeAllowFrom", () => {
@@ -87,5 +87,78 @@ describe("setup --mode", () => {
   it("ignores an unknown mode instead of writing it", () => {
     const cfg = apply({ apiKey: "k", inboxId: "i", mode: "shout" });
     expect(resolveOpenMailAccount({ cfg, accountId: "default" }).mode).toBe("channel");
+  });
+});
+
+describe("provisionOpenMailPod", () => {
+  const pods = [{ id: "pod_1", clientId: "team-a", name: "Team A" }];
+  const podApi = (over: Record<string, unknown> = {}) =>
+    mockApi({
+      listPods: vi.fn(async () => pods),
+      listInboxes: vi.fn(async () => [
+        { id: "inb_1", address: "a@omail.sh", podId: "pod_1" },
+        { id: "inb_2", address: "b@omail.sh", podId: "pod_other" },
+      ]),
+      mintPodKey: vi.fn(async () => ({ id: "key_p", token: "omk_pod" })),
+      ...over,
+    });
+
+  it("mints a pod key from an account key and resolves clientId", async () => {
+    const api = podApi();
+    const out = await provisionOpenMailPod({ api, accountId: "team", pod: "team-a", log: () => {} });
+    expect(out).toEqual({ podId: "pod_1", apiKey: "omk_pod", name: "Team A", inboxCount: 1 });
+    expect(api.mintPodKey).toHaveBeenCalledWith("pod_1", "openclaw:team");
+  });
+
+  it("keeps a pod key as-is (mint 403)", async () => {
+    const api = podApi({ mintPodKey: vi.fn(async () => null) });
+    const out = await provisionOpenMailPod({ api, accountId: "team", pod: "pod_1", log: () => {} });
+    expect(out.apiKey).toBeUndefined();
+    expect(out.podId).toBe("pod_1");
+  });
+
+  it("refuses a pod the key cannot see", async () => {
+    const api = podApi();
+    await expect(
+      provisionOpenMailPod({ api, accountId: "team", pod: "pod_x", log: () => {} }),
+    ).rejects.toThrow(/not visible/);
+    expect(api.mintPodKey).not.toHaveBeenCalled();
+  });
+
+  it("refuses an inbox key (sees no pods)", async () => {
+    const api = podApi({ listPods: vi.fn(async () => []) });
+    await expect(
+      provisionOpenMailPod({ api, accountId: "team", pod: "pod_1", log: () => {} }),
+    ).rejects.toThrow(/cannot see any pod/);
+  });
+});
+
+describe("setup pod shape", () => {
+  const apply = (input: Record<string, unknown>, cfg: Record<string, unknown> = {}) =>
+    setupAdapter.applyAccountConfig({ cfg: cfg as never, accountId: "team", input: input as never });
+
+  it("stores podId and clears a previous inboxId", () => {
+    const before = apply({ apiKey: "k", inboxId: "inb_1" });
+    expect(resolveOpenMailAccount({ cfg: before, accountId: "team" })).toMatchObject({
+      scope: "inbox",
+      inboxId: "inb_1",
+      podId: null,
+    });
+    const after = apply({ apiKey: "omk_pod", podId: "pod_1" }, before);
+    expect(resolveOpenMailAccount({ cfg: after, accountId: "team" })).toMatchObject({
+      scope: "pod",
+      inboxId: null,
+      podId: "pod_1",
+      configured: true,
+    });
+  });
+
+  it("a named pod account does not inherit the root inbox", () => {
+    const cfg = apply(
+      { apiKey: "omk_pod", podId: "pod_1" },
+      { channels: { openmail: { apiKey: "k", inboxId: "inb_root" } } },
+    );
+    expect(resolveOpenMailAccount({ cfg, accountId: "team" })).toMatchObject({ scope: "pod", inboxId: null });
+    expect(resolveOpenMailAccount({ cfg, accountId: "default" })).toMatchObject({ scope: "inbox", inboxId: "inb_root" });
   });
 });

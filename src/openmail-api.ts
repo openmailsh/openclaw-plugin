@@ -5,8 +5,16 @@ import { randomUUID } from "node:crypto";
 export type OpenMailInbox = {
   id: string;
   address: string;
+  podId?: string | null;
   name?: string | null;
   displayName?: string | null;
+};
+
+export type OpenMailPod = {
+  id: string;
+  clientId?: string | null;
+  name?: string | null;
+  isDefault?: boolean;
 };
 
 export type OpenMailAttachment = {
@@ -21,6 +29,7 @@ export type OpenMailAttachment = {
 export type OpenMailMessage = {
   id: string;
   threadId: string;
+  inboxId?: string;
   direction?: "inbound" | "outbound";
   fromAddr?: string | null;
   toAddr?: string | null;
@@ -98,6 +107,38 @@ export class OpenMailApi {
         `/v1/inboxes/${encodeURIComponent(inboxId)}/api-keys`,
         { name },
       )) as { id: string; token?: string };
+      if (!key.token) throw new Error("OpenMail did not return the key token");
+      return { id: key.id, token: key.token };
+    } catch (err) {
+      if (err instanceof OpenMailApiError && err.status === 403) return null;
+      throw err;
+    }
+  }
+
+  /**
+   * Pods visible to this key. Account-wide keys see all; a pod-scoped key sees
+   * exactly its own pod, which is how we learn a key's pod (there is no whoami).
+   */
+  async listPods(): Promise<OpenMailPod[]> {
+    const data = (await this.request("GET", "/v1/pods?limit=100")) as { data?: OpenMailPod[] };
+    return data.data ?? [];
+  }
+
+  /** `id` may be the pod id or its clientId. */
+  async getPod(id: string): Promise<OpenMailPod> {
+    return (await this.request("GET", `/v1/pods/${encodeURIComponent(id)}`)) as OpenMailPod;
+  }
+
+  /**
+   * Mint a pod-scoped key. Only account-wide keys may; a pod or inbox key gets
+   * 403, returned as null so the caller knows the key it holds is already as
+   * narrow as (or narrower than) the pod.
+   */
+  async mintPodKey(podId: string, name: string): Promise<{ id: string; token: string } | null> {
+    try {
+      const key = (await this.request("POST", `/v1/pods/${encodeURIComponent(podId)}/api-keys`, {
+        name,
+      })) as { id: string; token?: string };
       if (!key.token) throw new Error("OpenMail did not return the key token");
       return { id: key.id, token: key.token };
     } catch (err) {

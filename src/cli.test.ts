@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCliEnv, findBlockedFlag, resolveBundledCliPath } from "./cli.js";
+import { buildCliEnv, findBlockedFlag, isNewThreadSend, resolveBundledCliPath } from "./cli.js";
 
 describe("findBlockedFlag", () => {
   it("catches credential/endpoint flags in both spellings", () => {
@@ -51,5 +51,28 @@ describe("buildCliEnv", () => {
 describe("resolveBundledCliPath", () => {
   it("points at the bundled @openmail/cli entry", () => {
     expect(resolveBundledCliPath()).toMatch(/@openmail[\\/]cli[\\/]dist[\\/]index\.js$/);
+  });
+});
+
+describe("isNewThreadSend", () => {
+  it("flags send without a thread", () => {
+    expect(isNewThreadSend(["send", "--to", "a@b.c", "--body", "hi"])).toBe(true);
+    expect(isNewThreadSend(["--json", "send", "--to", "a@b.c"])).toBe(true);
+  });
+  it("lets replies and other commands through", () => {
+    expect(isNewThreadSend(["send", "--to", "a@b.c", "--thread-id", "thr_1"])).toBe(false);
+    expect(isNewThreadSend(["send", "--thread-id=thr_1"])).toBe(false);
+    expect(isNewThreadSend(["threads", "list"])).toBe(false);
+  });
+});
+
+describe("buildCliEnv pod scope", () => {
+  it("leaves OPENMAIL_INBOX_ID unset so commands pick their own inbox", () => {
+    const env = buildCliEnv(
+      { HOME: "/home/u", OPENMAIL_INBOX_ID: "stale" },
+      { apiKey: "omk_pod", inboxId: null, baseUrl: "https://api.openmail.sh" },
+    );
+    expect(env.OPENMAIL_INBOX_ID).toBeUndefined();
+    expect(env.OPENMAIL_API_KEY).toBe("omk_pod");
   });
 });

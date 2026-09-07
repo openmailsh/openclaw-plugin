@@ -16,6 +16,7 @@ const OpenMailAccountSchema = z
     configWrites: z.boolean().optional(),
     apiKey: SecretInputSchema.optional(),
     inboxId: z.string().min(1).optional(),
+    podId: z.string().min(1).optional(),
     baseUrl: z.string().url().optional(),
     dmPolicy: z.enum(["open", "allowlist", "disabled"]).optional(),
     allowFrom: z.array(z.string()).optional(),
@@ -30,7 +31,12 @@ export const openmailChannelConfigSchema = buildChannelConfigSchema(
   {
     uiHints: {
       apiKey: { label: "API key", sensitive: true },
-      inboxId: { label: "Inbox id" },
+      inboxId: { label: "Inbox id", help: "One inbox. Leave empty when podId is set." },
+      podId: {
+        label: "Pod id",
+        help: "Whole pod: every inbox in it, including ones the agent creates later. Needs a pod-scoped key.",
+        advanced: true,
+      },
       baseUrl: { label: "API base URL", advanced: true },
       allowFrom: {
         label: "Sender filter",

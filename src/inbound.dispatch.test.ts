@@ -14,7 +14,9 @@ const account: ResolvedOpenMailAccount = {
   enabled: true,
   configured: true,
   apiKey: "k",
+  scope: "inbox",
   inboxId: "inb_1",
+  podId: null,
   baseUrl: "https://api.openmail.sh",
   dmPolicy: undefined,
   allowFrom: ["ada@example.com"],
@@ -159,5 +161,38 @@ describe("dispatchOpenMailMessage notify mode", () => {
     const out = await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
     expect(out.kind).toBe("dropped");
     expect(notifyRuntime.enqueueSystemEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe("dispatchOpenMailMessage pod scope", () => {
+  const podAccount: Partial<ResolvedOpenMailAccount> = { scope: "pod", inboxId: null, podId: "pod_1" };
+
+  it("replies from the inbox that received the mail and keys the conversation per inbox", async () => {
+    const { ctx, api, buildContext } = harness({ ...apiMessage, inboxId: "inb_7" }, podAccount);
+    const out = await dispatchOpenMailMessage({ ctx, event: { ...event, inbox_id: "inb_7" }, api });
+    expect(out).toEqual({ kind: "dispatched" });
+    const built = buildContext.mock.calls[0][0] as {
+      conversation: { id: string };
+      extra: { OpenMailInboxId: string };
+    };
+    expect(built.conversation.id).toBe("inb_7/ada@example.com");
+    expect(built.extra.OpenMailInboxId).toBe("inb_7");
+    const routing = (ctx.channelRuntime as unknown as { routing: { resolveAgentRoute: ReturnType<typeof vi.fn> } })
+      .routing.resolveAgentRoute;
+    expect(routing.mock.calls[0][0]).toMatchObject({ peer: { id: "inb_7/ada@example.com" } });
+  });
+
+  it("does not drop events for other inboxes in the pod", async () => {
+    const { ctx, api, run } = harness({ ...apiMessage, inboxId: "inb_9" }, podAccount);
+    const out = await dispatchOpenMailMessage({ ctx, event: { ...event, inbox_id: "inb_9" }, api });
+    expect(out.kind).toBe("dispatched");
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells the agent which inbox it is in", async () => {
+    const { ctx, api, run } = harness({ ...apiMessage, inboxId: "inb_7" }, podAccount);
+    await dispatchOpenMailMessage({ ctx, event: { ...event, inbox_id: "inb_7" }, api });
+    const params = run.mock.calls[0][0] as { adapter: { ingest: (raw: unknown) => { textForAgent: string } } };
+    expect(params.adapter.ingest(event).textForAgent).toContain("Inbox: inb_7");
   });
 });

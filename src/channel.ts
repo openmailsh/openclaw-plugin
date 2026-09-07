@@ -49,18 +49,28 @@ export const openmailPlugin: ChannelPlugin<ResolvedOpenMailAccount, OpenMailProb
           describeAccountSnapshot({
             account,
             configured: account.configured,
-            extra: { inboxId: account.inboxId, baseUrl: account.baseUrl },
+            extra: { scope: account.scope, inboxId: account.inboxId, podId: account.podId, baseUrl: account.baseUrl },
           }),
       },
       status: createComputedAccountStatusAdapter<ResolvedOpenMailAccount, OpenMailProbe>({
         defaultRuntime: createDefaultChannelRuntimeState("default"),
         buildChannelSummary: ({ snapshot }) => buildBaseChannelStatusSummary(snapshot),
         probeAccount: async ({ account }) => {
-          if (!account.apiKey || !account.inboxId) {
-            return { ok: false, address: null, error: "missing apiKey or inboxId" };
+          if (!account.apiKey || !(account.inboxId || account.podId)) {
+            return { ok: false, address: null, error: "missing apiKey or inboxId/podId" };
           }
+          const api = new OpenMailApi(account.baseUrl, account.apiKey);
           try {
-            const inbox = await new OpenMailApi(account.baseUrl, account.apiKey).getInbox(account.inboxId);
+            if (account.scope === "pod" && account.podId) {
+              const pod = await api.getPod(account.podId);
+              const inboxes = (await api.listInboxes()).filter((i) => i.podId === pod.id);
+              return {
+                ok: true,
+                address: `pod ${pod.name ?? pod.id}, ${inboxes.length} inbox(es)`,
+                error: null,
+              };
+            }
+            const inbox = await api.getInbox(account.inboxId!);
             return { ok: true, address: inbox.address, error: null };
           } catch (err) {
             return { ok: false, address: null, error: String(err) };
@@ -68,8 +78,8 @@ export const openmailPlugin: ChannelPlugin<ResolvedOpenMailAccount, OpenMailProb
         },
         formatCapabilitiesProbe: ({ probe }) => [
           probe.ok
-            ? { text: `Inbox: ${probe.address}` }
-            : { text: `Inbox: unreachable (${probe.error})`, tone: "error" as const },
+            ? { text: `OpenMail: ${probe.address}` }
+            : { text: `OpenMail: unreachable (${probe.error})`, tone: "error" as const },
         ],
         collectStatusIssues: (accounts) =>
           accounts.flatMap((account) =>
@@ -80,8 +90,8 @@ export const openmailPlugin: ChannelPlugin<ResolvedOpenMailAccount, OpenMailProb
                     channel: OPENMAIL_CHANNEL_ID,
                     accountId: account.accountId,
                     kind: "config",
-                    message: "OpenMail account is missing apiKey or inboxId",
-                    fix: "Run `openclaw channels add openmail --api-key <key> --inbox-id <id>`.",
+                    message: "OpenMail account is missing apiKey or inboxId/podId",
+                    fix: "Run `openclaw channels add openmail --api-key <key>` (add --pod <id> for a whole pod).",
                   },
                 ],
           ),
@@ -90,7 +100,7 @@ export const openmailPlugin: ChannelPlugin<ResolvedOpenMailAccount, OpenMailProb
           name: account.name ?? undefined,
           enabled: account.enabled,
           configured: account.configured,
-          extra: { inboxId: account.inboxId },
+          extra: { scope: account.scope, inboxId: account.inboxId, podId: account.podId },
         }),
       }),
       gateway: {
@@ -123,7 +133,7 @@ export const openmailPlugin: ChannelPlugin<ResolvedOpenMailAccount, OpenMailProb
         channel: OPENMAIL_CHANNEL_ID,
         sendText: async ({ cfg, to, text, accountId, threadId }) => {
           const account = resolveOpenMailAccount({ cfg, accountId });
-          if (!account.apiKey || !account.inboxId) {
+          if (!account.apiKey || !(account.inboxId || account.podId)) {
             throw new Error("OpenMail account is not configured");
           }
           const api = new OpenMailApi(account.baseUrl, account.apiKey);
@@ -137,14 +147,25 @@ export const openmailPlugin: ChannelPlugin<ResolvedOpenMailAccount, OpenMailProb
               `OpenMail channel is reply-only: cannot start a new thread to ${address}. Set channels.openmail.allowNewThreads: true to enable proactive email.`,
             );
           }
-          const result = thread
-            ? await api.sendReply({ inboxId: account.inboxId, to: address, threadId: thread, body: text })
-            : await api.sendNew({
-                inboxId: account.inboxId,
-                to: address,
-                subject: firstLineAsSubject(text),
-                body: text,
-              });
+          if (thread) {
+            // Pod scope: answer from whichever inbox owns the thread.
+            const inboxId = account.inboxId ?? (await api.listThreadMessages(thread))[0]?.inboxId;
+            if (!inboxId) throw new Error(`OpenMail thread ${thread} is not visible to this account`);
+            const result = await api.sendReply({ inboxId, to: address, threadId: thread, body: text });
+            return { messageId: String(result.id ?? result.messageId ?? "") };
+          }
+          if (!account.inboxId) {
+            // A pod has many possible senders; a bare address does not say which.
+            throw new Error(
+              `OpenMail account "${account.accountId}" covers a whole pod; a new thread needs the sending inbox. Use: openclaw openmail -- send --inbox-id <id> --to ${address} --subject ... --body ...`,
+            );
+          }
+          const result = await api.sendNew({
+            inboxId: account.inboxId,
+            to: address,
+            subject: firstLineAsSubject(text),
+            body: text,
+          });
           return { messageId: String(result.id ?? result.messageId ?? "") };
         },
       },
