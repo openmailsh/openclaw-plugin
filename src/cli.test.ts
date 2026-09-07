@@ -53,3 +53,14 @@ describe("resolveBundledCliPath", () => {
     expect(resolveBundledCliPath()).toMatch(/@openmail[\\/]cli[\\/]dist[\\/]index\.js$/);
   });
 });
+
+describe("buildCliEnv pod scope", () => {
+  it("leaves OPENMAIL_INBOX_ID unset so commands pick their own inbox", () => {
+    const env = buildCliEnv(
+      { HOME: "/home/u", OPENMAIL_INBOX_ID: "stale" },
+      { apiKey: "omk_pod", inboxId: null, baseUrl: "https://api.openmail.sh" },
+    );
+    expect(env.OPENMAIL_INBOX_ID).toBeUndefined();
+    expect(env.OPENMAIL_API_KEY).toBe("omk_pod");
+  });
+});

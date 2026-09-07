@@ -58,8 +58,6 @@ const openclawBlock = {
   setupEntry: "./dist/setup-entry.js",
   channel: {
     ...OPENMAIL_META,
-    // Show the "who may email you" step during quickstart; the default is nobody.
-    quickstartAllowFrom: true,
     configuredState: { env: { allOf: ["OPENMAIL_API_KEY"] } },
     setup: { fields: openmailSetupContract.metadata.fields },
   },

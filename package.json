@@ -7,22 +7,28 @@
     "type": "git",
     "url": "https://github.com/openmailsh/openclaw-plugin"
   },
-  "homepage": "https://docs.openmail.sh/channels/openclaw",
+  "homepage": "https://docs.openmail.sh/integrations/openclaw",
   "type": "module",
   "files": [
     "dist",
+    "skills",
     "openclaw.plugin.json",
     "README.md"
   ],
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "build": "NODE_OPTIONS=--max-old-space-size=12288 tsc",
+    "typecheck": "NODE_OPTIONS=--max-old-space-size=12288 tsc --noEmit",
     "test": "vitest run",
-    "prepublishOnly": "pnpm build"
+    "manifest": "node scripts/build-manifest.mjs",
+    "manifest:check": "node scripts/build-manifest.mjs --check",
+    "validate-plugin": "node scripts/validate-plugin.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm manifest:check && pnpm validate-plugin",
+    "prepublishOnly": "pnpm check"
   },
   "dependencies": {
     "ws": "^8.18.0",
-    "zod": "4.4.3"
+    "zod": "4.4.3",
+    "@openmail/cli": "^0.5.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -44,68 +50,101 @@
       "./dist/index.js"
     ],
     "setupEntry": "./dist/setup-entry.js",
-    "install": {
-      "npmSpec": "@openmail/openclaw",
-      "defaultChoice": "npm",
-      "minHostVersion": ">=2026.9.2"
-    },
-    "compat": {
-      "pluginApi": ">=2026.9.2"
-    },
-    "build": {
-      "openclawVersion": "2026.9.2"
-    },
     "channel": {
       "id": "openmail",
-      "configuredState": {
-        "env": {
-          "allOf": [
-            "OPENMAIL_API_KEY",
-            "OPENMAIL_INBOX_ID"
-          ]
-        }
-      },
       "label": "OpenMail",
       "selectionLabel": "OpenMail (email)",
       "docsPath": "/channels/openmail",
       "docsLabel": "openmail",
-      "blurb": "Give your agent its own email address. Inbound mail wakes the agent; replies go out in-thread.",
+      "blurb": "Email for agents. Your agent gets its own address: it can receive mail, reply in-thread, send, and read attachments. Choose whether inbound mail wakes it, notifies you, or waits until asked.",
       "order": 80,
+      "configuredState": {
+        "env": {
+          "allOf": [
+            "OPENMAIL_API_KEY"
+          ]
+        }
+      },
       "setup": {
         "fields": [
           {
-            "key": "apiKey",
             "kind": "string",
             "sensitive": true,
             "cli": {
               "flags": "--api-key <key>",
-              "description": "OpenMail API key (inbox-scoped recommended)"
-            }
+              "description": "OpenMail API key (any scope; an inbox-scoped key is minted for you)"
+            },
+            "key": "apiKey"
           },
           {
-            "key": "inboxId",
             "kind": "string",
             "cli": {
               "flags": "--inbox-id <id>",
-              "description": "OpenMail inbox id"
-            }
+              "description": "Use an existing inbox (only needed when the key can see several)"
+            },
+            "key": "inboxId"
+          },
+          {
+            "kind": "string",
+            "cli": {
+              "flags": "--pod <id>",
+              "description": "Cover a whole pod instead of one inbox: every inbox in it, including ones the agent creates later. Pod id, clientId or name; a pod-scoped key is minted from an account key."
+            },
+            "key": "pod"
+          },
+          {
+            "kind": "string",
+            "cli": {
+              "flags": "--mailbox-name <name>",
+              "description": "Create a new inbox with this local part, e.g. sales -> sales@omail.sh"
+            },
+            "key": "mailboxName"
+          },
+          {
+            "kind": "string",
+            "cli": {
+              "flags": "--display-name <name>",
+              "description": "Sender name for a newly created inbox"
+            },
+            "key": "displayName"
+          },
+          {
+            "kind": "choice",
+            "choices": [
+              "channel",
+              "notify",
+              "tool"
+            ],
+            "cli": {
+              "flags": "--mode <mode>",
+              "description": "channel (default): mail wakes the agent, it replies in-thread. notify: agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound, email only when asked."
+            },
+            "key": "mode"
+          },
+          {
+            "kind": "string",
+            "cli": {
+              "flags": "--base-url <url>",
+              "description": "OpenMail API base URL (default https://api.openmail.sh)"
+            },
+            "key": "baseUrl"
           }
         ]
       }
     },
-    "release": {
-      "publishToClawHub": true,
-      "publishToNpm": true
+    "compat": {
+      "pluginApi": ">=2026.9.2",
+      "minGatewayVersion": "2026.9.2"
+    },
+    "build": {
+      "openclawVersion": "2026.9.2",
+      "pluginSdkVersion": "2026.9.2"
+    },
+    "install": {
+      "npmSpec": "@openmail/openclaw",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.9.2",
+      "allowInvalidConfigRecovery": true
     }
-  },
-  "pnpm": {
-    "ignoredBuiltDependencies": [
-      "@google/genai",
-      "esbuild",
-      "koffi",
-      "openclaw",
-      "protobufjs",
-      "tree-sitter-bash"
-    ]
   }
 }
