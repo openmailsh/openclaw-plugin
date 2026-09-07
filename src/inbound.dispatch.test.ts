@@ -18,6 +18,7 @@ const account: ResolvedOpenMailAccount = {
   baseUrl: "https://api.openmail.sh",
   dmPolicy: undefined,
   allowFrom: ["ada@example.com"],
+  mode: "channel",
   allowNewThreads: false,
   mediaMaxMb: 20,
 };
@@ -41,14 +42,14 @@ const apiMessage: OpenMailMessage = {
   attachments: [],
 };
 
-function harness(found: OpenMailMessage | null) {
+function harness(found: OpenMailMessage | null, overrides: Partial<ResolvedOpenMailAccount> = {}) {
   const run = vi.fn(async (params: { adapter: { ingest: (raw: unknown) => unknown; resolveTurn: (i: unknown) => Promise<unknown> } }) => {
     const ingested = params.adapter.ingest(event) as { id: string };
     return await params.adapter.resolveTurn(ingested);
   });
   const buildContext = vi.fn((p: unknown) => p);
   const ctx = {
-    account,
+    account: { ...account, ...overrides },
     accountId: "default",
     cfg: {},
     log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -132,5 +133,31 @@ describe("dispatchOpenMailMessage re-authorization", () => {
     const built = buildContext.mock.calls[0][0] as { extra: Record<string, unknown> };
     expect(built.extra.MediaPaths).toEqual(["/tmp/a.png"]);
     expect(built.extra.MediaTypes).toEqual(["image/png"]);
+  });
+});
+
+describe("dispatchOpenMailMessage notify mode", () => {
+  it("wakes the main session instead of starting a reply turn", async () => {
+    const { ctx, api, run } = harness(apiMessage, { mode: "notify" });
+    const notifyRuntime = { enqueueSystemEvent: vi.fn(() => true), requestHeartbeat: vi.fn() };
+    const out = await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
+    expect(out).toEqual({ kind: "dispatched" });
+    expect(run).not.toHaveBeenCalled();
+    expect(api.sendReply).not.toHaveBeenCalled();
+    const [text, opts] = notifyRuntime.enqueueSystemEvent.mock.calls[0] as [string, { sessionKey: string }];
+    expect(text).toMatch(/New email arrived/);
+    expect(text).toContain("ada@example.com");
+    expect(opts.sessionKey).toBe("agent:main:main");
+    expect(notifyRuntime.requestHeartbeat).toHaveBeenCalledWith(
+      expect.objectContaining({ intent: "immediate", sessionKey: "agent:main:main" }),
+    );
+  });
+
+  it("still re-authorizes the sender before notifying", async () => {
+    const { ctx, api } = harness({ ...apiMessage, fromAddr: "mallory@evil.test" }, { mode: "notify" });
+    const notifyRuntime = { enqueueSystemEvent: vi.fn(() => true), requestHeartbeat: vi.fn() };
+    const out = await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
+    expect(out.kind).toBe("dropped");
+    expect(notifyRuntime.enqueueSystemEvent).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { OpenMailApi, OpenMailInbox } from "./openmail-api.js";
-import { normalizeAllowFrom, provisionOpenMailAccount } from "./setup.js";
+import { normalizeAllowFrom, provisionOpenMailAccount, setupAdapter } from "./setup.js";
+import { resolveOpenMailAccount } from "./accounts.js";
 
 describe("normalizeAllowFrom", () => {
   it("splits, trims, lowercases and dedupes", () => {
@@ -69,5 +70,29 @@ describe("provisionOpenMailAccount", () => {
     expect(api.getInbox).toHaveBeenCalledWith("inb_1");
     expect(api.resolveInbox).not.toHaveBeenCalled();
     expect(api.createInbox).not.toHaveBeenCalled();
+  });
+});
+
+describe("setup --mode", () => {
+  const apply = (input: Record<string, unknown>, cfg: Record<string, unknown> = {}) =>
+    setupAdapter.applyAccountConfig({
+      cfg: cfg as never,
+      accountId: "default",
+      input: input as never,
+    });
+
+  it("defaults to channel when not given", () => {
+    const cfg = apply({ apiKey: "k", inboxId: "i" });
+    expect(resolveOpenMailAccount({ cfg, accountId: "default" }).mode).toBe("channel");
+  });
+
+  it("stores notify / tool when chosen", () => {
+    const cfg = apply({ apiKey: "k", inboxId: "i", mode: "notify" });
+    expect(resolveOpenMailAccount({ cfg, accountId: "default" }).mode).toBe("notify");
+  });
+
+  it("ignores an unknown mode instead of writing it", () => {
+    const cfg = apply({ apiKey: "k", inboxId: "i", mode: "shout" });
+    expect(resolveOpenMailAccount({ cfg, accountId: "default" }).mode).toBe("channel");
   });
 });

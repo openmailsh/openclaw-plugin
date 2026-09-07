@@ -17,6 +17,8 @@ import {
   OPENMAIL_CHANNEL_ID,
   resolveDefaultOpenMailAccountId,
   resolveOpenMailAccount,
+  OPENMAIL_MODES,
+  type OpenMailMode,
   type ResolvedOpenMailAccount,
 } from "./accounts.js";
 
@@ -30,6 +32,7 @@ type OpenMailSetupInput = ChannelSetupInput & {
   keepKey?: boolean;
   /** Optional local sender filter. Empty (default): everyone the inbox receives from. */
   allowFrom?: string[] | string;
+  mode?: OpenMailMode;
 };
 
 /** "a@x.com, y.com" | ["a@x.com","y.com"] -> lowercased, deduped list. */
@@ -65,6 +68,7 @@ const baseSetupAdapter = createPatchedAccountSetupAdapter({
       patch.allowFrom = allowFrom;
       patch.dmPolicy = "allowlist";
     }
+    if (i.mode && OPENMAIL_MODES.includes(i.mode)) patch.mode = i.mode;
     return patch;
   },
 });
@@ -137,7 +141,7 @@ function ownInboxId(cfg: OpenClawConfig, accountId: string): string | undefined 
   return normalizeOptionalString(section.accounts?.[accountId]?.inboxId);
 }
 
-const setupAdapter: typeof baseSetupAdapter = {
+export const setupAdapter: typeof baseSetupAdapter = {
   ...baseSetupAdapter,
   // Runs before the config write, so what lands in openclaw.json is the
   // resolved inbox id and (when we could mint one) an inbox-scoped key.
@@ -162,6 +166,14 @@ const setupAdapter: typeof baseSetupAdapter = {
       keepKey: i.keepKey === true,
       log: (line) => runtime.log?.(line),
     });
+    const mode: OpenMailMode = i.mode && OPENMAIL_MODES.includes(i.mode) ? i.mode : current.mode;
+    runtime.log?.(
+      mode === "notify"
+        ? `Mode: notify. New mail at ${result.address} is summarised to you on your main chat; the agent does not reply by itself.`
+        : mode === "tool"
+          ? `Mode: tool. Nothing inbound wakes the agent; it uses ${result.address} only when you ask.`
+          : `Mode: channel. Mail to ${result.address} wakes the agent and it replies in the same thread.`,
+    );
     const allowFrom = normalizeAllowFrom(i.allowFrom);
     runtime.log?.(
       allowFrom.length > 0
@@ -207,6 +219,15 @@ export const openmailSetupContract = defineChannelSetupContract({
     keepKey: {
       kind: "boolean",
       cli: { flags: "--keep-key", description: "Store the given key as-is instead of minting an inbox-scoped key" },
+    },
+    mode: {
+      kind: "choice",
+      choices: OPENMAIL_MODES,
+      cli: {
+        flags: "--mode <mode>",
+        description:
+          "channel (default): mail wakes the agent, it replies in-thread. notify: agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound, email only when asked.",
+      },
     },
     allowFrom: {
       kind: "string-list",
@@ -297,7 +318,7 @@ export const openmailSetupPlugin: ChannelPlugin<ResolvedOpenMailAccount> = {
     completionNote: {
       title: "OpenMail next steps",
       lines: [
-        "Restart the Gateway. Send an email to the inbox address; the agent replies in the same thread.",
+        "Restart the Gateway. channel mode: email the inbox, the agent replies in-thread. notify mode: the agent tells you about new mail on your usual chat. Change with --mode.",
         `Docs: ${formatDocsLink("/channels/openmail", "channels/openmail")}`,
       ],
     },

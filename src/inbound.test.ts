@@ -13,6 +13,7 @@ function account(over: Partial<ResolvedOpenMailAccount> = {}): ResolvedOpenMailA
     baseUrl: "https://api.openmail.sh",
     dmPolicy: undefined,
     allowFrom: [],
+    mode: "channel",
     allowNewThreads: false,
     mediaMaxMb: 20,
     ...over,

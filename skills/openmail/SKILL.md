@@ -6,10 +6,19 @@ metadata: {"openclaw":{"emoji":"📬","requires":{"bins":["openclaw"]}}}
 
 # OpenMail
 
-This agent has a real email address. Inbound mail arrives on its own through
-the OpenMail channel — you do NOT need to poll, set up cron, or add inbox
-checks to HEARTBEAT.md. This skill is for everything else: reading a thread,
-replying, sending, attachments.
+This agent has a real email address. How inbound mail reaches you depends on
+the channel's `mode`:
+
+- `channel` (default): each new mail starts a turn with the sender; your answer
+  is sent back as the email. No polling needed.
+- `notify`: new mail is announced to you as a system event; relay it to the
+  user, do not reply to the sender unless asked.
+- `tool`: nothing arrives on its own. Check the inbox with `threads list`
+  below when the user asks you to wait for or look for a mail.
+
+In `channel` and `notify` mode you do NOT need to poll, set up cron, or add
+inbox checks to HEARTBEAT.md. This skill is for everything else: reading a
+thread, replying, sending, attachments.
 
 Every command goes through the channel's credentials:
 

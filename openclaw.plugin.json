@@ -149,6 +149,14 @@
               "type": "string"
             }
           },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "channel",
+              "notify",
+              "tool"
+            ]
+          },
           "allowNewThreads": {
             "type": "boolean"
           },
@@ -297,6 +305,14 @@
                     "type": "string"
                   }
                 },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "channel",
+                    "notify",
+                    "tool"
+                  ]
+                },
                 "allowNewThreads": {
                   "type": "boolean"
                 },
@@ -334,6 +350,10 @@
         "dmPolicy": {
           "label": "Sender policy",
           "help": "open (default): everyone. allowlist: only allowFrom. disabled: nobody."
+        },
+        "mode": {
+          "label": "Mode",
+          "help": "channel (default): mail wakes the agent and it replies in-thread. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask."
         },
         "allowNewThreads": {
           "label": "Allow new threads",

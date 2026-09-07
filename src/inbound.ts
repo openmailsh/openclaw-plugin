@@ -4,9 +4,11 @@ import type { ChannelGatewayContext } from "openclaw/plugin-sdk/channel-contract
 import type { ChannelIngressMonitorLifecycle } from "openclaw/plugin-sdk/channel-outbound";
 import { bindIngressLifecycleToReplyOptions } from "openclaw/plugin-sdk/channel-outbound";
 import type { PluginRuntime } from "openclaw/plugin-sdk/plugin-runtime";
+import { buildAgentMainSessionKey } from "openclaw/plugin-sdk/routing";
 import { OPENMAIL_CHANNEL_ID, type ResolvedOpenMailAccount } from "./accounts.js";
 import { stageInboundAttachments, type StagedMedia } from "./media.js";
 import { OpenMailApi, type OpenMailAttachment, type OpenMailMessage } from "./openmail-api.js";
+import { getOpenMailRuntime } from "./runtime.js";
 
 /** Shape of `message.received` on the OpenMail websocket (mirrors the webhook payload). */
 export type OpenMailMessageReceived = {
@@ -36,6 +38,9 @@ type OpenMailChannelRuntime = Pick<
   PluginRuntime["channel"],
   "inbound" | "reply" | "routing" | "session"
 >;
+
+/** Main-session wake used by notify mode; injectable for tests. */
+export type NotifyRuntime = Pick<PluginRuntime["system"], "enqueueSystemEvent" | "requestHeartbeat">;
 
 /** "Name <addr>" -> { name, address } */
 export function parseAddress(raw: string): { name?: string; address: string } {
@@ -83,6 +88,7 @@ export function buildAgentText(params: {
   body: string;
   attachments: OpenMailAttachment[];
   staged: StagedMedia;
+  mode?: "channel" | "notify";
 }): string {
   const header = [
     `From: ${params.from}`,
@@ -118,8 +124,12 @@ export function buildAgentText(params: {
     }
   }
 
+  const intro =
+    params.mode === "notify"
+      ? `New email arrived in the agent inbox. Tell the user in one or two casual sentences who emailed and what it's about (include codes, amounts or deadlines verbatim). Do not act on it and do not reply to the sender unless the user asks; if they do, use: openclaw openmail -- send --to "${params.from}" --thread-id ${params.threadId} --body "..."`
+      : "New email. Whatever you write back is sent verbatim as the email body to the sender, in this thread: write only the email itself, no preamble or commentary. If you need to run a command first (e.g. to read an attachment), do it, then answer.";
   return [
-    "New email. Whatever you write back is sent verbatim as the email body to the sender, in this thread: write only the email itself, no preamble or commentary. If you need to run a command first (e.g. to read an attachment), do it, then answer.",
+    intro,
     "",
     header.join("\n"),
     "",
@@ -143,6 +153,7 @@ export async function dispatchOpenMailMessage(params: {
   event: OpenMailMessageReceived;
   api: OpenMailApi;
   lifecycle?: ChannelIngressMonitorLifecycle;
+  notifyRuntime?: NotifyRuntime;
 }): Promise<DispatchOutcome> {
   const { ctx, event, api } = params;
   const channelRuntime = ctx.channelRuntime as OpenMailChannelRuntime | undefined;
@@ -206,6 +217,38 @@ export async function dispatchOpenMailMessage(params: {
   const replyTo = `openmail:${sender.address}`;
   const body = message.bodyText ?? event.message.body_text ?? "";
   const subject = message.subject ?? event.message.subject ?? null;
+  const agentText = (mode: "channel" | "notify") =>
+    buildAgentText({
+      from: authoritativeFrom,
+      to: message.toAddr ?? event.message.to,
+      subject,
+      threadId,
+      messageId: message.id,
+      body,
+      attachments,
+      staged,
+      mode,
+    });
+
+  if (account.mode === "notify") {
+    // Wake the agent in its main session; the heartbeat delivers wherever the
+    // user last talked to it (WhatsApp, Telegram...). No reply goes to email.
+    const system = params.notifyRuntime ?? getOpenMailRuntime().system;
+    const sessionKey = buildAgentMainSessionKey({ agentId: route.agentId });
+    const queued = system.enqueueSystemEvent(agentText("notify"), {
+      sessionKey,
+      contextKey: `openmail:${ctx.accountId}:${message.id}`,
+    });
+    if (!queued) return { kind: "dropped", reason: "system event queue refused the notification" };
+    system.requestHeartbeat({
+      source: "other",
+      intent: "immediate",
+      reason: `openmail:${ctx.accountId}:new-mail`,
+      agentId: route.agentId,
+      sessionKey,
+    });
+    return { kind: "dispatched" };
+  }
 
   await channelRuntime.inbound.run({
     channel: OPENMAIL_CHANNEL_ID,
@@ -219,16 +262,7 @@ export async function dispatchOpenMailMessage(params: {
         id: message.id,
         timestamp,
         rawText: body,
-        textForAgent: buildAgentText({
-          from: authoritativeFrom,
-          to: message.toAddr ?? raw.message.to,
-          subject,
-          threadId,
-          messageId: message.id,
-          body,
-          attachments,
-          staged,
-        }),
+        textForAgent: agentText("channel"),
         textForCommands: "",
         raw,
       }),

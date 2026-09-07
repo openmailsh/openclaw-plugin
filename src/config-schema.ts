@@ -4,6 +4,7 @@ import {
 } from "openclaw/plugin-sdk/channel-config-schema";
 import { buildSecretInputSchema } from "openclaw/plugin-sdk/secret-input";
 import { z } from "zod";
+import { OPENMAIL_MODES } from "./accounts.js";
 
 // Literal string or SecretRef object; the host materialises refs before we read them.
 const SecretInputSchema = buildSecretInputSchema();
@@ -18,6 +19,7 @@ const OpenMailAccountSchema = z
     baseUrl: z.string().url().optional(),
     dmPolicy: z.enum(["open", "allowlist", "disabled"]).optional(),
     allowFrom: z.array(z.string()).optional(),
+    mode: z.enum(OPENMAIL_MODES).optional(),
     allowNewThreads: z.boolean().optional(),
     mediaMaxMb: z.number().min(0).max(100).optional(),
   })
@@ -37,6 +39,10 @@ export const openmailChannelConfigSchema = buildChannelConfigSchema(
       dmPolicy: {
         label: "Sender policy",
         help: "open (default): everyone. allowlist: only allowFrom. disabled: nobody.",
+      },
+      mode: {
+        label: "Mode",
+        help: "channel (default): mail wakes the agent and it replies in-thread. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask.",
       },
       allowNewThreads: {
         label: "Allow new threads",

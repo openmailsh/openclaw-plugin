@@ -25,6 +25,7 @@ Get a key from [app.openmail.sh](https://app.openmail.sh) or with the
 | an account or pod key | picks your inbox (or **creates one if you have none**), mints an inbox-scoped key for it, stores only that. The broad key is never written to `openclaw.json`. |
 | `--mailbox-name sales` | creates `sales@omail.sh` (add `--display-name "Sales bot"` for the sender name) |
 | `--inbox-id <id>` | uses that existing inbox — needed when the key can see several |
+| `--mode notify` / `--mode tool` | how inbound mail reaches the agent; see [Modes](#modes). Default `channel`. |
 | `--allow-from a@x.com,x.com` | optional local filter: only these senders (addresses, domains, `*.x.com`) reach the agent. **Default: everyone** the inbox receives from. Server-side allow/block rules are yours to manage in the OpenMail console or CLI; the plugin never writes them. |
 | `--keep-key` | store the given key unchanged, skip minting |
 
@@ -96,6 +97,23 @@ Inbound attachments reach the agent three ways, in order of preference:
 3. **The CLI.** For anything else the notification says exactly what to run:
    `openclaw openmail -- attachments text --message-id <id> --filename <name>`.
 
+## Modes
+
+One channel, three ways to use it. Pick per account with `--mode` or
+`channels.openmail.mode`.
+
+| Mode | Inbound mail | Who replies |
+| --- | --- | --- |
+| `channel` (default) | wakes the agent as a conversation with the sender | the agent, in-thread, automatically |
+| `notify` | the agent tells you about it on your usual chat (WhatsApp, Telegram…), no auto-reply | you, by asking the agent to reply |
+| `tool` | ignored; no websocket | nobody unless you ask; email is just a skill |
+
+`notify` fits a personal inbox: the agent relays "Stripe says your card
+expires Friday" and only answers the sender when you say so. `channel` fits an
+inbox that *is* the agent (support@, sales@). `tool` fits "sign up for X and
+tell me the code" flows where the agent reads the inbox itself via the CLI.
+Re-authorization and `allowFrom` apply in every mode.
+
 ## Behaviour
 
 - Each sender address is a separate conversation (like a WhatsApp contact), so
@@ -124,6 +142,7 @@ Inbound attachments reach the agent three ways, in order of preference:
     "openmail": {
       "apiKey": "om_…",          // inbox-scoped, or a SecretRef (below)
       "inboxId": "…",
+      "mode": "channel",         // default; or "notify" / "tool"
       "allowFrom": ["@yourcompany.com"],  // optional local filter; default: everyone
       "allowNewThreads": false,  // default
       "mediaMaxMb": 20,          // default

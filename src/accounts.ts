@@ -14,6 +14,14 @@ export const DEFAULT_BASE_URL = "https://api.openmail.sh";
 /** Aggregate size of inbound attachments staged for the agent per message. */
 export const DEFAULT_MEDIA_MAX_MB = 20;
 
+/**
+ *  channel  inbound mail wakes the agent, it replies in-thread (default)
+ *  notify   inbound mail is summarised to you on your main chat; no auto-reply
+ *  tool     nothing inbound; the agent only uses email when you ask (CLI skill)
+ */
+export const OPENMAIL_MODES = ["channel", "notify", "tool"] as const;
+export type OpenMailMode = (typeof OPENMAIL_MODES)[number];
+
 export type OpenMailAccountConfig = {
   name?: string;
   enabled?: boolean;
@@ -23,6 +31,7 @@ export type OpenMailAccountConfig = {
   baseUrl?: string;
   dmPolicy?: string;
   allowFrom?: string[];
+  mode?: OpenMailMode;
   /** Let the agent open new email threads (proactive sends). Default false: reply-only. */
   allowNewThreads?: boolean;
   /** Aggregate cap for inbound attachments handed to the agent. 0 disables staging. */
@@ -41,6 +50,7 @@ export type ResolvedOpenMailAccount = {
   baseUrl: string;
   dmPolicy: string | undefined;
   allowFrom: string[];
+  mode: OpenMailMode;
   allowNewThreads: boolean;
   mediaMaxMb: number;
 };
@@ -122,6 +132,7 @@ export function resolveOpenMailAccount(params: {
     baseUrl,
     dmPolicy: normalizeOptionalString(merged.dmPolicy),
     allowFrom: Array.isArray(merged.allowFrom) ? merged.allowFrom.map(String) : [],
+    mode: OPENMAIL_MODES.includes(merged.mode as OpenMailMode) ? (merged.mode as OpenMailMode) : "channel",
     allowNewThreads: merged.allowNewThreads === true,
     mediaMaxMb,
   };

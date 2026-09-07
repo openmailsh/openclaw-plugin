@@ -109,6 +109,19 @@
             "key": "keepKey"
           },
           {
+            "kind": "choice",
+            "choices": [
+              "channel",
+              "notify",
+              "tool"
+            ],
+            "cli": {
+              "flags": "--mode <mode>",
+              "description": "channel (default): mail wakes the agent, it replies in-thread. notify: agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound, email only when asked."
+            },
+            "key": "mode"
+          },
+          {
             "kind": "string-list",
             "cli": {
               "flags": "--allow-from <senders>",

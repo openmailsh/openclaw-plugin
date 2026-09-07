@@ -41,6 +41,14 @@ export async function startOpenMailGatewayAccount(
     await waitUntilAbort(ctx.abortSignal);
     return;
   }
+  if (account.mode === "tool") {
+    // Nothing inbound: the agent reaches for email only when asked, via the
+    // bundled CLI skill. No websocket to hold; just stay resident.
+    ctx.log?.info?.(`[${ctx.accountId}] OpenMail in tool mode; not listening for inbound mail`);
+    ctx.setStatus({ ...ctx.getStatus(), accountId: ctx.accountId, running: true, connected: false });
+    await waitUntilAbort(ctx.abortSignal);
+    return;
+  }
   if (!account.apiKey || !account.inboxId) {
     throw new Error(`OpenMail account "${ctx.accountId}" needs apiKey and inboxId.`);
   }
