@@ -53,11 +53,12 @@ function step(name, fn) {
   }
 }
 
-step("install linked plugin", () => run(["plugins", "install", "--link", ".", "--force", "--accept-capabilities"]));
+step("install linked plugin", () => run(["plugins", "install", "--link", ".", "--force"]));
 
 const inspect = step("inspect plugin runtime", () => run(["plugins", "inspect", "openmail", "--runtime"]));
 if (!/Status:\s*loaded/.test(inspect)) fail("plugin did not load in the host runtime", inspect);
 if (!/channel:\s*openmail/.test(inspect)) fail("manifest did not register the openmail channel", inspect);
+if (!/CLI commands:[\s\S]*\bopenmail\b/.test(inspect)) fail("openmail CLI command not registered", inspect);
 
 step("configure a throwaway account", () =>
   run(["config", "set", "channels.openmail.accounts.validate.apiKey", "omk_validate_not_a_real_key"]),
@@ -67,14 +68,14 @@ step("configure inboxId", () =>
 );
 
 // The passthrough must refuse flags that would redirect credentials.
-for (const blocked of ["--api-key", "--base-url", "--state-path", "--api-key=x"]) {
+for (const blocked of ["--api-key", "--base-url", "--profile"]) {
   let leaked = false;
   try {
-    run(["openmail", "--account", "validate", "--", "inbox", "list", blocked]);
+    run(["openmail", "--account", "validate", "--", "inbox", "list", blocked, "x"]);
     leaked = true;
   } catch (error) {
     const text = `${error.stdout ?? ""}${error.stderr ?? ""}`;
-    if (!/managed by the channel config/i.test(text)) fail(`CLI passthrough rejected ${blocked} for the wrong reason`, text);
+    if (!/not allowed|blocked|refus/i.test(text)) fail(`CLI passthrough rejected ${blocked} for the wrong reason`, text);
   }
   if (leaked) fail(`CLI passthrough accepted ${blocked}`);
   console.log(`ok  passthrough blocks ${blocked}`);

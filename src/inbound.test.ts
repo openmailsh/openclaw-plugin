@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { resolveInboxMode, type ResolvedOpenMailAccount } from "./accounts.js";
-import { buildAgentText, parseAddress } from "./inbound.js";
+import type { ResolvedOpenMailAccount } from "./accounts.js";
+import { buildAgentText, isSenderAllowed, parseAddress } from "./inbound.js";
 
 function account(over: Partial<ResolvedOpenMailAccount> = {}): ResolvedOpenMailAccount {
   return {
@@ -9,16 +9,61 @@ function account(over: Partial<ResolvedOpenMailAccount> = {}): ResolvedOpenMailA
     enabled: true,
     configured: true,
     apiKey: "k",
-    scope: "inbox",
     inboxId: "i",
-    podId: null,
     baseUrl: "https://api.openmail.sh",
-    mode: "channel",
+    dmPolicy: undefined,
+    allowFrom: [],
+    allowNewThreads: false,
     mediaMaxMb: 20,
-    inboxes: {},
     ...over,
   };
 }
+
+describe("isSenderAllowed", () => {
+  it("denies everyone when allowFrom is empty (fail closed)", () => {
+    expect(isSenderAllowed(account(), "anyone@example.com")).toBe(false);
+  });
+
+  it("denies everyone with dmPolicy open but no '*' (misconfiguration stays closed)", () => {
+    expect(isSenderAllowed(account({ dmPolicy: "open" }), "a@b.com")).toBe(false);
+  });
+
+  it("allows everyone only with an explicit '*'", () => {
+    expect(isSenderAllowed(account({ allowFrom: ["*"] }), "a@b.com")).toBe(true);
+    expect(isSenderAllowed(account({ dmPolicy: "open", allowFrom: ["*"] }), "a@b.com")).toBe(true);
+  });
+
+  it("disabled denies even with '*'", () => {
+    expect(isSenderAllowed(account({ dmPolicy: "disabled", allowFrom: ["*"] }), "a@b.com")).toBe(false);
+  });
+
+  it("matches exact addresses case-insensitively", () => {
+    const acc = account({ allowFrom: ["Alice@Example.com"] });
+    expect(isSenderAllowed(acc, "alice@example.com")).toBe(true);
+    expect(isSenderAllowed(acc, "bob@example.com")).toBe(false);
+  });
+
+  it("matches domains in every spelling the API accepts", () => {
+    for (const entry of ["example.com", "@example.com", "*@example.com"]) {
+      const acc = account({ allowFrom: [entry] });
+      expect(isSenderAllowed(acc, "x@example.com"), entry).toBe(true);
+      expect(isSenderAllowed(acc, "x@sub.example.com"), entry).toBe(false);
+      expect(isSenderAllowed(acc, "x@notexample.com"), entry).toBe(false);
+    }
+  });
+
+  it("'*.domain' matches the domain and its subdomains only", () => {
+    const acc = account({ allowFrom: ["*.example.com"] });
+    expect(isSenderAllowed(acc, "x@example.com")).toBe(true);
+    expect(isSenderAllowed(acc, "x@mail.example.com")).toBe(true);
+    expect(isSenderAllowed(acc, "x@example.com.evil.io")).toBe(false);
+    expect(isSenderAllowed(acc, "x@fakeexample.com")).toBe(false);
+  });
+
+  it("ignores blank entries", () => {
+    expect(isSenderAllowed(account({ allowFrom: ["", "  "] }), "a@b.com")).toBe(false);
+  });
+});
 
 describe("parseAddress", () => {
   it("extracts name and lowercases the address", () => {
@@ -70,23 +115,5 @@ describe("buildAgentText", () => {
     });
     expect(text).toContain("(extracted text, truncated)");
     expect(text.length).toBeLessThan(10_000);
-  });
-});
-
-describe("resolveInboxMode", () => {
-  it("inherits the account mode without an override", () => {
-    expect(resolveInboxMode(account({ mode: "notify" }), { id: "inb_1", address: "a@omail.sh" })).toBe("notify");
-  });
-
-  it("matches by id before address, and by lowercased address", () => {
-    const a = account({ inboxes: { inb_1: { mode: "tool" }, "a@omail.sh": { mode: "notify" } } });
-    expect(resolveInboxMode(a, { id: "inb_1", address: "A@omail.sh" })).toBe("tool");
-    expect(resolveInboxMode(a, { id: "inb_2", address: "A@omail.sh" })).toBe("notify");
-    expect(resolveInboxMode(a, { id: "inb_3" })).toBe("channel");
-  });
-
-  it("ignores an invalid override value", () => {
-    const a = account({ inboxes: { inb_1: { mode: "shout" as never } } });
-    expect(resolveInboxMode(a, { id: "inb_1" })).toBe("channel");
   });
 });
