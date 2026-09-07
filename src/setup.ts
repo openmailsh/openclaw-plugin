@@ -28,8 +28,6 @@ type OpenMailSetupInput = ChannelSetupInput & {
   baseUrl?: string;
   mailboxName?: string;
   displayName?: string;
-  /** Skip minting an inbox-scoped key; store the given key as-is. */
-  keepKey?: boolean;
   /** Optional local sender filter. Empty (default): everyone the inbox receives from. */
   allowFrom?: string[] | string;
   mode?: OpenMailMode;
@@ -89,10 +87,9 @@ export async function provisionOpenMailAccount(params: {
   accountId: string;
   inboxId?: string;
   create: { mailboxName?: string; displayName?: string };
-  keepKey: boolean;
   log: (line: string) => void;
 }): Promise<{ inboxId: string; apiKey?: string; address: string; created: boolean }> {
-  const { api, accountId, keepKey, log } = params;
+  const { api, accountId, log } = params;
 
   let inbox: OpenMailInbox;
   let created = false;
@@ -118,10 +115,6 @@ export async function provisionOpenMailAccount(params: {
       ? `Created OpenMail inbox ${inbox.address} (${inbox.id}) on your account.`
       : `Using OpenMail inbox ${inbox.address} (${inbox.id}).`,
   );
-
-  if (keepKey) {
-    return { inboxId: inbox.id, address: inbox.address, created };
-  }
 
   const minted = await api.mintInboxKey(inbox.id, `openclaw:${accountId}`);
   if (!minted) {
@@ -163,7 +156,6 @@ export const setupAdapter: typeof baseSetupAdapter = {
         mailboxName: normalizeOptionalString(i.mailboxName),
         displayName: normalizeOptionalString(i.displayName),
       },
-      keepKey: i.keepKey === true,
       log: (line) => runtime.log?.(line),
     });
     const mode: OpenMailMode = i.mode && OPENMAIL_MODES.includes(i.mode) ? i.mode : current.mode;
@@ -215,10 +207,6 @@ export const openmailSetupContract = defineChannelSetupContract({
     displayName: {
       kind: "string",
       cli: { flags: "--display-name <name>", description: "Sender name for a newly created inbox" },
-    },
-    keepKey: {
-      kind: "boolean",
-      cli: { flags: "--keep-key", description: "Store the given key as-is instead of minting an inbox-scoped key" },
     },
     mode: {
       kind: "choice",

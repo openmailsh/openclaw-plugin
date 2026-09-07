@@ -24,20 +24,13 @@ function mockApi(over: Partial<Record<keyof OpenMailApi, unknown>> = {}) {
 }
 
 describe("provisionOpenMailAccount", () => {
-  const base = { accountId: "sales", create: {}, keepKey: false, log: () => {} };
+  const base = { accountId: "sales", create: {}, log: () => {} };
 
   it("resolves the key's single inbox and mints a scoped key", async () => {
     const api = mockApi();
     const out = await provisionOpenMailAccount({ ...base, api });
     expect(out).toEqual({ inboxId: "inb_1", apiKey: "omk_scoped", address: "sales@omail.sh", created: false });
     expect(api.mintInboxKey).toHaveBeenCalledWith("inb_1", "openclaw:sales");
-  });
-
-  it("keeps the given key when told to", async () => {
-    const api = mockApi();
-    const out = await provisionOpenMailAccount({ ...base, api, keepKey: true });
-    expect(out.apiKey).toBeUndefined();
-    expect(api.mintInboxKey).not.toHaveBeenCalled();
   });
 
   it("does not store a key when the one given is already inbox-scoped (mint 403)", async () => {

@@ -27,7 +27,6 @@ Get a key from [app.openmail.sh](https://app.openmail.sh) or with the
 | `--inbox-id <id>` | uses that existing inbox — needed when the key can see several |
 | `--mode notify` / `--mode tool` | how inbound mail reaches the agent; see [Modes](#modes). Default `channel`. |
 | `--allow-from a@x.com,x.com` | optional local filter: only these senders (addresses, domains, `*.x.com`) reach the agent. **Default: everyone** the inbox receives from. Server-side allow/block rules are yours to manage in the OpenMail console or CLI; the plugin never writes them. |
-| `--keep-key` | store the given key unchanged, skip minting |
 
 The address to email is printed at the end. Re-running against an existing
 account is a no-op.
