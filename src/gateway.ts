@@ -75,6 +75,7 @@ export async function startOpenMailGatewayAccount(
   const signal = ctx.abortSignal;
   let retries = 0;
   let lastEventId: string | undefined;
+  let stopError: unknown;
 
   try {
     while (!signal?.aborted) {
@@ -122,13 +123,7 @@ export async function startOpenMailGatewayAccount(
       retries = Date.now() - startedAt >= MIN_STABLE_MS ? 0 : retries + 1;
     }
   } catch (error) {
-    ctx.setStatus({
-      accountId: ctx.accountId,
-      running: false,
-      connected: false,
-      lastStopAt: Date.now(),
-      lastError: String(error),
-    });
+    stopError = error;
     throw error;
   } finally {
     ctx.setStatus({
@@ -136,6 +131,7 @@ export async function startOpenMailGatewayAccount(
       running: false,
       connected: false,
       lastStopAt: Date.now(),
+      ...(stopError ? { lastError: String(stopError) } : {}),
     });
   }
 }
@@ -157,6 +153,9 @@ function connectOnce(params: {
     });
     let settled = false;
     let ping: NodeJS.Timeout | undefined;
+    // Serialize inbound turns so lastEventId advances in receive order and
+    // same-sender sessions do not run concurrently.
+    let eventTail: Promise<void> = Promise.resolve();
 
     const finish = (fatal?: string, err?: Error) => {
       if (settled) return;
@@ -169,8 +168,10 @@ function connectOnce(params: {
       } catch {
         // already closed
       }
-      if (err) reject(err);
-      else resolve(fatal);
+      void eventTail.finally(() => {
+        if (err) reject(err);
+        else resolve(fatal);
+      });
     };
     const onAbort = () => finish();
     ctx.abortSignal?.addEventListener("abort", onAbort, { once: true });
@@ -203,7 +204,12 @@ function connectOnce(params: {
         return;
       }
       if (payload.event !== "message.received") return;
-      void params.onEvent(payload as unknown as OpenMailMessageReceived);
+      const event = payload as unknown as OpenMailMessageReceived;
+      eventTail = eventTail
+        .then(() => params.onEvent(event))
+        .catch((handlerErr) => {
+          ctx.log?.warn?.(`openmail: event handler error: ${String(handlerErr)}`);
+        });
     });
 
     ws.on("close", (code, reason) => {

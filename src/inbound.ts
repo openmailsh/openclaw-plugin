@@ -49,7 +49,9 @@ export function isSenderAllowed(account: ResolvedOpenMailAccount, address: strin
   // before the event ever reaches us. `allowFrom` here is an extra local filter.
   const policy = account.dmPolicy ?? "open";
   if (policy === "disabled") return false;
-  if (policy === "open" || account.allowFrom.length === 0) return true;
+  if (policy === "open") return true;
+  // allowlist (and pairing until implemented): empty list means deny all.
+  if (account.allowFrom.length === 0) return false;
   const domain = address.split("@")[1] ?? "";
   return account.allowFrom.some((entry) => {
     const e = entry.trim().toLowerCase();
