@@ -1,0 +1,142 @@
+{
+  "name": "@openmail/openclaw",
+  "version": "0.1.0",
+  "description": "OpenMail channel plugin for OpenClaw: give your agent an email address.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/openmailsh/openclaw-plugin"
+  },
+  "homepage": "https://docs.openmail.sh/channels/openclaw",
+  "type": "module",
+  "files": [
+    "dist",
+    "openclaw.plugin.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "NODE_OPTIONS=--max-old-space-size=12288 tsc",
+    "typecheck": "NODE_OPTIONS=--max-old-space-size=12288 tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm build"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.12",
+    "openclaw": "2026.9.2",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.9.2"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.js"
+    ],
+    "setupEntry": "./dist/setup-entry.js",
+    "install": {
+      "npmSpec": "@openmail/openclaw",
+      "defaultChoice": "npm",
+      "minHostVersion": ">=2026.9.2"
+    },
+    "compat": {
+      "pluginApi": ">=2026.9.2"
+    },
+    "build": {
+      "openclawVersion": "2026.9.2"
+    },
+    "channel": {
+      "id": "openmail",
+      "configuredState": {
+        "env": {
+          "allOf": [
+            "OPENMAIL_API_KEY"
+          ]
+        }
+      },
+      "label": "OpenMail",
+      "selectionLabel": "OpenMail (email)",
+      "docsPath": "/channels/openmail",
+      "docsLabel": "openmail",
+      "blurb": "Give your agent its own email address. Inbound mail wakes the agent; replies go out in-thread. Creates an inbox if your key has none.",
+      "order": 80,
+      "setup": {
+        "fields": [
+          {
+            "key": "apiKey",
+            "kind": "string",
+            "sensitive": true,
+            "cli": {
+              "flags": "--api-key <key>",
+              "description": "OpenMail API key (any scope; an inbox-scoped key is minted for you)"
+            }
+          },
+          {
+            "key": "inboxId",
+            "kind": "string",
+            "cli": {
+              "flags": "--inbox-id <id>",
+              "description": "Use an existing inbox (only needed when the key can see several)"
+            }
+          },
+          {
+            "key": "mailboxName",
+            "kind": "string",
+            "cli": {
+              "flags": "--mailbox-name <name>",
+              "description": "Create a new inbox with this local part, e.g. sales -> sales@omail.sh"
+            }
+          },
+          {
+            "key": "displayName",
+            "kind": "string",
+            "cli": {
+              "flags": "--display-name <name>",
+              "description": "Sender name for a newly created inbox"
+            }
+          },
+          {
+            "key": "keepKey",
+            "kind": "boolean",
+            "cli": {
+              "flags": "--keep-key",
+              "description": "Store the given key as-is instead of minting an inbox-scoped key"
+            }
+          },
+          {
+            "key": "baseUrl",
+            "kind": "string",
+            "cli": {
+              "flags": "--base-url <url>",
+              "description": "OpenMail API base URL (default https://api.openmail.sh)"
+            }
+          }
+        ]
+      }
+    },
+    "release": {
+      "publishToClawHub": true,
+      "publishToNpm": true
+    }
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "@google/genai",
+      "esbuild",
+      "koffi",
+      "openclaw",
+      "protobufjs",
+      "tree-sitter-bash"
+    ]
+  }
+}
