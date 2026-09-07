@@ -37,8 +37,6 @@ export type OpenMailAccountConfig = {
   dmPolicy?: string;
   allowFrom?: string[];
   mode?: OpenMailMode;
-  /** Let the agent open new email threads (proactive sends). Default false: reply-only. */
-  allowNewThreads?: boolean;
   /** Aggregate cap for inbound attachments handed to the agent. 0 disables staging. */
   mediaMaxMb?: number;
   accounts?: Record<string, OpenMailAccountConfig>;
@@ -61,7 +59,6 @@ export type ResolvedOpenMailAccount = {
   dmPolicy: string | undefined;
   allowFrom: string[];
   mode: OpenMailMode;
-  allowNewThreads: boolean;
   mediaMaxMb: number;
 };
 
@@ -157,7 +154,6 @@ export function resolveOpenMailAccount(params: {
     dmPolicy: normalizeOptionalString(merged.dmPolicy),
     allowFrom: Array.isArray(merged.allowFrom) ? merged.allowFrom.map(String) : [],
     mode: OPENMAIL_MODES.includes(merged.mode as OpenMailMode) ? (merged.mode as OpenMailMode) : "channel",
-    allowNewThreads: merged.allowNewThreads === true,
     mediaMaxMb,
   };
 }

@@ -21,7 +21,6 @@ const account: ResolvedOpenMailAccount = {
   dmPolicy: undefined,
   allowFrom: ["ada@example.com"],
   mode: "channel",
-  allowNewThreads: false,
   mediaMaxMb: 20,
 };
 

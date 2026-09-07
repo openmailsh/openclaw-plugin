@@ -20,16 +20,6 @@ export function resolveBundledCliPath(): string {
   return path.join(path.dirname(pkg), "dist", "index.js");
 }
 
-/**
- * `send` without `--thread-id` opens a new thread. Same gate as
- * `openclaw message send`: off unless allowNewThreads is set.
- */
-export function isNewThreadSend(args: readonly string[]): boolean {
-  const command = args.find((a) => !a.startsWith("-"));
-  if (command !== "send") return false;
-  return !args.some((a) => a === "--thread-id" || a.startsWith("--thread-id="));
-}
-
 /** Reject attempts to swap credentials or endpoint from the argument list. */
 export function findBlockedFlag(args: readonly string[]): string | undefined {
   return args.find((a) => BLOCKED_FLAGS.has(a) || [...BLOCKED_FLAGS].some((f) => a.startsWith(`${f}=`)));
@@ -77,13 +67,6 @@ export function registerOpenMailCli(api: OpenClawPluginApi): void {
           const blocked = findBlockedFlag(args);
           if (blocked) {
             console.error(`${blocked} is managed by the channel config and cannot be passed here.`);
-            process.exitCode = 1;
-            return;
-          }
-          if (isNewThreadSend(args) && !account.allowNewThreads) {
-            console.error(
-              `OpenMail channel is reply-only: pass --thread-id to answer in an existing thread, or set channels.openmail.allowNewThreads: true.`,
-            );
             process.exitCode = 1;
             return;
           }

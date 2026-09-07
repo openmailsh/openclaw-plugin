@@ -21,7 +21,6 @@ const OpenMailAccountSchema = z
     dmPolicy: z.enum(["open", "allowlist", "disabled"]).optional(),
     allowFrom: z.array(z.string()).optional(),
     mode: z.enum(OPENMAIL_MODES).optional(),
-    allowNewThreads: z.boolean().optional(),
     mediaMaxMb: z.number().min(0).max(100).optional(),
   })
   .strict();
@@ -49,10 +48,6 @@ export const openmailChannelConfigSchema = buildChannelConfigSchema(
       mode: {
         label: "Mode",
         help: "channel (default): mail wakes the agent and it replies in-thread. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask.",
-      },
-      allowNewThreads: {
-        label: "Allow new threads",
-        help: "Off (default): the agent can only reply in-thread. On: it may email any address.",
       },
       mediaMaxMb: {
         label: "Attachment budget (MB)",

@@ -178,10 +178,23 @@ export async function provisionOpenMailPod(params: {
     throw new Error(`Pod "${pod}" is not visible to this key. Pods it can see:\n${list}`);
   }
   const name = target.name ?? target.clientId ?? target.id;
-  const inboxCount = (await api.listInboxes()).filter((i) => i.podId === target.id).length;
+  const podInboxes = (await api.listInboxes()).filter((i) => i.podId === target.id);
+  const inboxCount = podInboxes.length;
   const minted = await api.mintPodKey(target.id, `openclaw:${accountId}`);
   if (!minted) {
-    // 403: already a pod key. Since it can see `target`, it is the key for it.
+    // 403: a pod key or an inbox key; both can see their pod. Only a pod key
+    // can mint inbox keys, so probe with one (and revoke it at once). A pod
+    // with no inboxes cannot have an inbox key, so nothing to probe there.
+    const probeInbox = podInboxes[0];
+    if (probeInbox) {
+      const probe = await api.mintInboxKey(probeInbox.id, `openclaw:${accountId}:probe`);
+      if (!probe) {
+        throw new Error(
+          `This key is scoped to one inbox, so it cannot cover pod ${name}. Use an account key or the pod's own key.`,
+        );
+      }
+      await api.revokeInboxKey(probeInbox.id, probe.id).catch(() => undefined);
+    }
     log(`Using pod ${name} (${target.id}), ${inboxCount} inbox(es).`);
     return { podId: target.id, name, inboxCount };
   }

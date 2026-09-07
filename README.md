@@ -79,9 +79,6 @@ so the defences are on what the agent can *do*, not on who can write:
 - **Sender rules stay yours.** The plugin never writes server-side allow/block
   rules; manage those in the OpenMail console or CLI (`openmail policy …`).
   `allowFrom` / `dmPolicy` in OpenClaw config add an optional local filter.
-- **Reply-only.** The agent can reply in the thread that woke it. It cannot
-  start a new thread or mail an arbitrary address unless you set
-  `allowNewThreads: true`. This also gates `openclaw message send --channel openmail`.
 - **Least-privilege key.** Only an inbox-scoped key is stored; it cannot list
   other inboxes, mint keys, or change policy.
 - **Re-authorized replies.** The websocket frame is only a hint. Before the
@@ -148,9 +145,10 @@ Re-authorization and `allowFrom` apply in every mode.
   should say so.
 - Replies go to the original sender via `POST /v1/inboxes/{id}/send` with the
   thread id, so they land in-thread with a `Re:` subject and quoted original.
-- With `allowNewThreads: true` the agent can also start threads:
-  `openclaw message send --channel openmail --to a@b.com "…"`. The first line
-  becomes the subject.
+- The agent can also start threads: `openclaw message send --channel openmail
+  --to a@b.com "…"` (first line becomes the subject) or the CLI `send`.
+  Outbound allow/block rules, if you want them, live in OpenMail
+  (`openmail policy … --direction outbound`).
 - Who may email the inbox is governed by OpenMail's allow/block rules
   (console or CLI). `channels.openmail.allowFrom` is an optional local filter
   with entries like `"someone@x.com"`, `"x.com"`, `"@x.com"` or `"*.x.com"`;
@@ -169,7 +167,6 @@ Re-authorization and `allowFrom` apply in every mode.
       "inboxId": "…",             // or "podId": "…" for a whole pod
       "mode": "channel",         // default; or "notify" / "tool"
       "allowFrom": ["@yourcompany.com"],  // optional local filter; default: everyone
-      "allowNewThreads": false,  // default
       "mediaMaxMb": 20,          // default
       "accounts": {
         "sales": {

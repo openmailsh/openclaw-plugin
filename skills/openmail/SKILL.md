@@ -74,9 +74,8 @@ openclaw openmail -- send --to "person@example.com" --subject "Report" --body "<
 `--body` is plain text or HTML (detected). `--attach <path>` is repeatable.
 The response has `messageId` and `threadId`; keep `threadId` to continue later.
 
-New threads are off unless the channel config sets `allowNewThreads: true`.
-If sending fails with a reply-only error, tell the user; do not work around
-it.
+If a send is rejected by an outbound policy rule, tell the user; do not work
+around it.
 
 ## Reading mail
 

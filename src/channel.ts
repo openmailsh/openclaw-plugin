@@ -139,14 +139,6 @@ export const openmailPlugin: ChannelPlugin<ResolvedOpenMailAccount, OpenMailProb
           const api = new OpenMailApi(account.baseUrl, account.apiKey);
           const address = stripPrefix(to);
           const thread = threadId ? String(threadId) : undefined;
-          if (!thread && !account.allowNewThreads) {
-            // Reply-only by default: an injected "forward this to x@y" cannot
-            // become a fresh email to an arbitrary address. Replies stay bound
-            // to the thread that triggered them.
-            throw new Error(
-              `OpenMail channel is reply-only: cannot start a new thread to ${address}. Set channels.openmail.allowNewThreads: true to enable proactive email.`,
-            );
-          }
           if (thread) {
             // Pod scope: answer from whichever inbox owns the thread.
             const inboxId = account.inboxId ?? (await api.listThreadMessages(thread))[0]?.inboxId;

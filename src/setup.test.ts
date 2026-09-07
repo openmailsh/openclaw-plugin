@@ -110,11 +110,23 @@ describe("provisionOpenMailPod", () => {
     expect(api.mintPodKey).toHaveBeenCalledWith("pod_1", "openclaw:team");
   });
 
-  it("keeps a pod key as-is (mint 403)", async () => {
-    const api = podApi({ mintPodKey: vi.fn(async () => null) });
+  it("keeps a pod key as-is (pod mint 403, inbox mint works)", async () => {
+    const revokeInboxKey = vi.fn(async () => undefined);
+    const api = podApi({ mintPodKey: vi.fn(async () => null), revokeInboxKey });
     const out = await provisionOpenMailPod({ api, accountId: "team", pod: "pod_1", log: () => {} });
     expect(out.apiKey).toBeUndefined();
     expect(out.podId).toBe("pod_1");
+    expect(revokeInboxKey).toHaveBeenCalledWith("inb_1", "key_1");
+  });
+
+  it("refuses an inbox key that happens to see its pod (both mints 403)", async () => {
+    const api = podApi({
+      mintPodKey: vi.fn(async () => null),
+      mintInboxKey: vi.fn(async () => null),
+    });
+    await expect(
+      provisionOpenMailPod({ api, accountId: "team", pod: "pod_1", log: () => {} }),
+    ).rejects.toThrow(/scoped to one inbox/);
   });
 
   it("refuses a pod the key cannot see", async () => {

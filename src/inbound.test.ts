@@ -16,7 +16,6 @@ function account(over: Partial<ResolvedOpenMailAccount> = {}): ResolvedOpenMailA
     dmPolicy: undefined,
     allowFrom: [],
     mode: "channel",
-    allowNewThreads: false,
     mediaMaxMb: 20,
     ...over,
   };
