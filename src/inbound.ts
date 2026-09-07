@@ -48,15 +48,15 @@ export function parseAddress(raw: string): { name?: string; address: string } {
 }
 
 export function isSenderAllowed(account: ResolvedOpenMailAccount, address: string): boolean {
-  // OpenMail's correspondent policy is the primary gate and runs server-side
-  // before the event ever reaches us. This is the local mirror of it, and it
-  // fails closed: no list means nobody, and "open" has to be spelled out with
-  // a "*" entry so an unconfigured channel never accepts mail from anyone.
-  const policy = account.dmPolicy ?? "allowlist";
-  if (policy === "disabled") return false;
+  // Who may email the inbox at all is OpenMail's job (allow/block rules in the
+  // console or CLI). This is an optional local filter on top: with no
+  // allowFrom the agent hears from everyone the inbox receives from — the
+  // agent needs to get the Instagram signup mail, not just mail from you.
   const entries = account.allowFrom.map((e) => e.trim().toLowerCase()).filter(Boolean);
-  if (entries.includes("*")) return true;
-  if (policy === "open") return false; // "open" without "*" is a misconfiguration; stay closed
+  const policy = account.dmPolicy ?? (entries.length > 0 ? "allowlist" : "open");
+  if (policy === "disabled") return false;
+  if (policy === "open" || entries.includes("*")) return true;
+  if (entries.length === 0) return false; // explicit allowlist with nobody on it
   const domain = address.split("@")[1] ?? "";
   return entries.some((e) => {
     if (e.startsWith("*.")) {
@@ -174,7 +174,7 @@ export async function dispatchOpenMailMessage(params: {
   if (!isSenderAllowed(account, sender.address)) {
     return {
       kind: "dropped",
-      reason: `${sender.address} is not in channels.openmail.allowFrom (add the address, a domain, or "*")`,
+      reason: `${sender.address} is filtered out by channels.openmail.allowFrom / dmPolicy`,
     };
   }
 

@@ -31,12 +31,12 @@ export const openmailChannelConfigSchema = buildChannelConfigSchema(
       inboxId: { label: "Inbox id" },
       baseUrl: { label: "API base URL", advanced: true },
       allowFrom: {
-        label: "Allowed senders",
-        help: 'Addresses or domains that may email the agent. "*" = anyone.',
+        label: "Sender filter",
+        help: "Optional. Only these addresses or domains reach the agent. Empty = everyone the inbox receives from. Server-side allow/block rules live in the OpenMail console or CLI.",
       },
       dmPolicy: {
         label: "Sender policy",
-        help: 'allowlist (default): only allowFrom. open: requires "*" in allowFrom.',
+        help: "open (default): everyone. allowlist: only allowFrom. disabled: nobody.",
       },
       allowNewThreads: {
         label: "Allow new threads",

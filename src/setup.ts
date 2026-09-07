@@ -28,7 +28,7 @@ type OpenMailSetupInput = ChannelSetupInput & {
   displayName?: string;
   /** Skip minting an inbox-scoped key; store the given key as-is. */
   keepKey?: boolean;
-  /** Senders allowed to reach the agent. `*` opens the inbox to everyone. */
+  /** Optional local sender filter. Empty (default): everyone the inbox receives from. */
   allowFrom?: string[] | string;
 };
 
@@ -63,7 +63,7 @@ const baseSetupAdapter = createPatchedAccountSetupAdapter({
     if (baseUrl) patch.baseUrl = baseUrl;
     if (allowFrom.length > 0) {
       patch.allowFrom = allowFrom;
-      patch.dmPolicy = allowFrom.includes("*") ? "open" : "allowlist";
+      patch.dmPolicy = "allowlist";
     }
     return patch;
   },
@@ -86,10 +86,9 @@ export async function provisionOpenMailAccount(params: {
   inboxId?: string;
   create: { mailboxName?: string; displayName?: string };
   keepKey: boolean;
-  allowFrom: string[];
   log: (line: string) => void;
 }): Promise<{ inboxId: string; apiKey?: string; address: string; created: boolean }> {
-  const { api, accountId, keepKey, allowFrom, log } = params;
+  const { api, accountId, keepKey, log } = params;
 
   let inbox: OpenMailInbox;
   let created = false;
@@ -115,28 +114,6 @@ export async function provisionOpenMailAccount(params: {
       ? `Created OpenMail inbox ${inbox.address} (${inbox.id}) on your account.`
       : `Using OpenMail inbox ${inbox.address} (${inbox.id}).`,
   );
-
-  // Server-side gate, set before we narrow the key (inbox keys cannot set
-  // policy). Only for inboxes we created or when the user gave a list: an
-  // existing inbox may carry a policy the user configured elsewhere.
-  if (created || allowFrom.length > 0) {
-    const outcome = await api.setInboundAllowlist(inbox.id, allowFrom);
-    if (outcome === "forbidden") {
-      log("Note: this key cannot set the inbox's inbound policy; only the local allowFrom filter applies.");
-    } else if (outcome === "inherited") {
-      log(
-        `Inbound policy: allowlist, inheriting your pod/account allow rules (a pod key cannot add its own). Locally only ${allowFrom.join(", ")} reach the agent.`,
-      );
-    } else if (allowFrom.includes("*")) {
-      log(`Inbound policy: open. Anyone can email ${inbox.address} and reach the agent.`);
-    } else if (allowFrom.length > 0) {
-      log(`Inbound policy: allowlist (${allowFrom.join(", ")}). Other senders are rejected server-side.`);
-    } else {
-      log(
-        `Inbound policy: allowlist, currently empty, so nobody can reach the agent yet. Re-run with --allow-from you@example.com (or "*" to open it).`,
-      );
-    }
-  }
 
   if (keepKey) {
     return { inboxId: inbox.id, address: inbox.address, created };
@@ -183,10 +160,14 @@ const setupAdapter: typeof baseSetupAdapter = {
         displayName: normalizeOptionalString(i.displayName),
       },
       keepKey: i.keepKey === true,
-      allowFrom: normalizeAllowFrom(i.allowFrom),
       log: (line) => runtime.log?.(line),
     });
-    runtime.log?.(`Email ${result.address} to talk to this agent.`);
+    const allowFrom = normalizeAllowFrom(i.allowFrom);
+    runtime.log?.(
+      allowFrom.length > 0
+        ? `Only ${allowFrom.join(", ")} reach the agent (channels.openmail.allowFrom). Server-side allow/block rules are managed in the OpenMail console or CLI.`
+        : `Anyone can email ${result.address} and reach the agent. To restrict senders, set --allow-from here, or manage allow/block rules in the OpenMail console or CLI.`,
+    );
     return {
       ...i,
       inboxId: result.inboxId,
@@ -231,7 +212,7 @@ export const openmailSetupContract = defineChannelSetupContract({
       kind: "string-list",
       cli: {
         flags: "--allow-from <senders>",
-        description: 'Who may email the agent: addresses or domains, comma-separated. "*" opens it to everyone. Default: nobody.',
+        description: "Optional local filter: only these senders (addresses or domains, comma-separated) reach the agent. Default: everyone.",
       },
     },
     baseUrl: {
@@ -303,7 +284,7 @@ export const openmailSetupPlugin: ChannelPlugin<ResolvedOpenMailAccount> = {
       },
       {
         inputKey: "allowFrom",
-        message: 'Who may email the agent? Addresses or domains, comma-separated. "*" = anyone. Empty = nobody yet.',
+        message: "Restrict who reaches the agent? Addresses or domains, comma-separated. Empty = everyone.",
         required: false,
         applyEmptyValue: false,
         currentValue: ({ cfg, accountId }) => {

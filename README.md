@@ -25,7 +25,7 @@ Get a key from [app.openmail.sh](https://app.openmail.sh) or with the
 | an account or pod key | picks your inbox (or **creates one if you have none**), mints an inbox-scoped key for it, stores only that. The broad key is never written to `openclaw.json`. |
 | `--mailbox-name sales` | creates `sales@omail.sh` (add `--display-name "Sales bot"` for the sender name) |
 | `--inbox-id <id>` | uses that existing inbox — needed when the key can see several |
-| `--allow-from a@x.com,x.com` | who may email the agent (addresses, domains, `*.x.com`, or `"*"` for anyone). Set server-side on the inbox and mirrored locally. **Default: nobody** — a fresh channel accepts no mail until you add a sender. |
+| `--allow-from a@x.com,x.com` | optional local filter: only these senders (addresses, domains, `*.x.com`) reach the agent. **Default: everyone** the inbox receives from. Server-side allow/block rules are yours to manage in the OpenMail console or CLI; the plugin never writes them. |
 | `--keep-key` | store the given key unchanged, skip minting |
 
 The address to email is printed at the end. Re-running against an existing
@@ -46,13 +46,13 @@ openclaw channels status
 
 ## Security defaults
 
-Email is the easiest prompt-injection surface an agent has, so the channel is
-closed until you open it:
+Email is the easiest prompt-injection surface an agent has. The inbox itself
+is open (an agent that signs up for services must receive mail from anyone),
+so the defences are on what the agent can *do*, not on who can write:
 
-- **Default-deny senders.** `dmPolicy` defaults to `allowlist`; an empty
-  `allowFrom` accepts nobody. `open` only works with `"*"` in `allowFrom`.
-  The list is applied server-side (OpenMail correspondent policy) when the
-  key can set policy, and always enforced locally.
+- **Sender rules stay yours.** The plugin never writes server-side allow/block
+  rules; manage those in the OpenMail console or CLI (`openmail policy …`).
+  `allowFrom` / `dmPolicy` in OpenClaw config add an optional local filter.
 - **Reply-only.** The agent can reply in the thread that woke it. It cannot
   start a new thread or mail an arbitrary address unless you set
   `allowNewThreads: true`. This also gates `openclaw message send --channel openmail`.
@@ -108,10 +108,11 @@ Inbound attachments reach the agent three ways, in order of preference:
 - With `allowNewThreads: true` the agent can also start threads:
   `openclaw message send --channel openmail --to a@b.com "…"`. The first line
   becomes the subject.
-- Who may email the inbox is governed by OpenMail's correspondent policy
-  (server-side). `channels.openmail.dmPolicy` / `allowFrom` mirror it locally:
-  `"allowlist"` (default) with entries like `"someone@x.com"`, `"x.com"`,
-  `"@x.com"` or `"*.x.com"`; `"open"` (needs `"*"`); or `"disabled"`.
+- Who may email the inbox is governed by OpenMail's allow/block rules
+  (console or CLI). `channels.openmail.allowFrom` is an optional local filter
+  with entries like `"someone@x.com"`, `"x.com"`, `"@x.com"` or `"*.x.com"`;
+  setting it implies `dmPolicy: "allowlist"`. `"open"` (default) hears from
+  everyone; `"disabled"` from nobody.
 - Mails from the same sender are processed in order; different senders run
   in parallel.
 
@@ -123,8 +124,7 @@ Inbound attachments reach the agent three ways, in order of preference:
     "openmail": {
       "apiKey": "om_…",          // inbox-scoped, or a SecretRef (below)
       "inboxId": "…",
-      "dmPolicy": "allowlist",   // optional
-      "allowFrom": ["@yourcompany.com"],
+      "allowFrom": ["@yourcompany.com"],  // optional local filter; default: everyone
       "allowNewThreads": false,  // default
       "mediaMaxMb": 20,          // default
       "accounts": {

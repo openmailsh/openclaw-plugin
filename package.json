@@ -58,7 +58,6 @@
       "docsLabel": "openmail",
       "blurb": "Give your agent its own email address. Inbound mail wakes the agent; replies go out in-thread. Needs an inbox to exist; creates one if the key has none.",
       "order": 80,
-      "quickstartAllowFrom": true,
       "configuredState": {
         "env": {
           "allOf": [
@@ -113,7 +112,7 @@
             "kind": "string-list",
             "cli": {
               "flags": "--allow-from <senders>",
-              "description": "Who may email the agent: addresses or domains, comma-separated. \"*\" opens it to everyone. Default: nobody."
+              "description": "Optional local filter: only these senders (addresses or domains, comma-separated) reach the agent. Default: everyone."
             },
             "key": "allowFrom"
           },

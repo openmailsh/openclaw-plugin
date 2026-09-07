@@ -20,27 +20,25 @@ function account(over: Partial<ResolvedOpenMailAccount> = {}): ResolvedOpenMailA
 }
 
 describe("isSenderAllowed", () => {
-  it("denies everyone when allowFrom is empty (fail closed)", () => {
-    expect(isSenderAllowed(account(), "anyone@example.com")).toBe(false);
+  it("accepts everyone by default (server-side rules decide who reaches the inbox)", () => {
+    expect(isSenderAllowed(account(), "anyone@example.com")).toBe(true);
+    expect(isSenderAllowed(account({ dmPolicy: "open" }), "anyone@example.com")).toBe(true);
   });
 
-  it("denies everyone with dmPolicy open but no '*' (misconfiguration stays closed)", () => {
-    expect(isSenderAllowed(account({ dmPolicy: "open" }), "a@b.com")).toBe(false);
-  });
-
-  it("allows everyone only with an explicit '*'", () => {
-    expect(isSenderAllowed(account({ allowFrom: ["*"] }), "a@b.com")).toBe(true);
-    expect(isSenderAllowed(account({ dmPolicy: "open", allowFrom: ["*"] }), "a@b.com")).toBe(true);
-  });
-
-  it("disabled denies even with '*'", () => {
-    expect(isSenderAllowed(account({ dmPolicy: "disabled", allowFrom: ["*"] }), "a@b.com")).toBe(false);
-  });
-
-  it("matches exact addresses case-insensitively", () => {
+  it("a configured allowFrom turns on the local filter", () => {
     const acc = account({ allowFrom: ["Alice@Example.com"] });
     expect(isSenderAllowed(acc, "alice@example.com")).toBe(true);
     expect(isSenderAllowed(acc, "bob@example.com")).toBe(false);
+  });
+
+  it("dmPolicy open ignores allowFrom; '*' opens an allowlist", () => {
+    expect(isSenderAllowed(account({ dmPolicy: "open", allowFrom: ["a@b.com"] }), "x@y.com")).toBe(true);
+    expect(isSenderAllowed(account({ allowFrom: ["a@b.com", "*"] }), "x@y.com")).toBe(true);
+  });
+
+  it("explicit allowlist with no entries denies; disabled denies everything", () => {
+    expect(isSenderAllowed(account({ dmPolicy: "allowlist" }), "a@b.com")).toBe(false);
+    expect(isSenderAllowed(account({ dmPolicy: "disabled", allowFrom: ["*"] }), "a@b.com")).toBe(false);
   });
 
   it("matches domains in every spelling the API accepts", () => {
@@ -60,8 +58,8 @@ describe("isSenderAllowed", () => {
     expect(isSenderAllowed(acc, "x@fakeexample.com")).toBe(false);
   });
 
-  it("ignores blank entries", () => {
-    expect(isSenderAllowed(account({ allowFrom: ["", "  "] }), "a@b.com")).toBe(false);
+  it("blank-only allowFrom is treated as unset", () => {
+    expect(isSenderAllowed(account({ allowFrom: ["", "  "] }), "a@b.com")).toBe(true);
   });
 });
 
