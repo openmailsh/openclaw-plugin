@@ -56,7 +56,7 @@
       "selectionLabel": "OpenMail (email)",
       "docsPath": "/channels/openmail",
       "docsLabel": "openmail",
-      "blurb": "Give your agent its own email address. Inbound mail wakes the agent; replies go out in-thread. Needs an inbox to exist; creates one if the key has none.",
+      "blurb": "Email for agents. Your agent gets its own address: it can receive mail, reply in-thread, send, and read attachments. Choose whether inbound mail wakes it, notifies you, or waits until asked.",
       "order": 80,
       "configuredState": {
         "env": {
