@@ -88,7 +88,7 @@
             "kind": "string",
             "cli": {
               "flags": "--pod <id>",
-              "description": "Cover a whole pod instead of one inbox: every inbox in it, including ones the agent creates later. Pod id or clientId; a pod-scoped key is minted from an account key."
+              "description": "Cover a whole pod instead of one inbox: every inbox in it, including ones the agent creates later. Pod id, clientId or name; a pod-scoped key is minted from an account key."
             },
             "key": "pod"
           },

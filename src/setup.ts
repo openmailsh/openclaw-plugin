@@ -25,7 +25,7 @@ import {
 type OpenMailSetupInput = ChannelSetupInput & {
   apiKey?: string;
   inboxId?: string;
-  /** Pod id or clientId. Makes the account cover every inbox in the pod. */
+  /** Pod id, clientId or (unique) name. Makes the account cover every inbox in the pod. */
   pod?: string;
   baseUrl?: string;
   mailboxName?: string;
@@ -73,8 +73,9 @@ const baseSetupAdapter = createPatchedAccountSetupAdapter({
     const patch: Record<string, unknown> = {};
     const apiKey = normalizeOptionalString(i.apiKey);
     const inboxId = normalizeOptionalString(i.inboxId);
-    // `pod` is the CLI input; prepareAccountConfigInput resolves it to `podId`.
-    const podId = normalizeOptionalString((i as { podId?: string }).podId);
+    // By the time we run, prepareAccountConfigInput has replaced the user's
+    // `--pod <id|clientId|name>` with the resolved pod id.
+    const podId = normalizeOptionalString(i.pod);
     const baseUrl = normalizeOptionalString(i.baseUrl);
     const allowFrom = normalizeAllowFrom(i.allowFrom);
     if (apiKey) patch.apiKey = apiKey;
@@ -167,8 +168,13 @@ export async function provisionOpenMailPod(params: {
 }): Promise<{ podId: string; apiKey?: string; name: string; inboxCount: number }> {
   const { api, accountId, pod, log } = params;
   const visible = await api.listPods();
-  const target = visible.find((p) => p.id === pod || p.clientId === pod);
+  const byName = visible.filter((p) => p.name?.toLowerCase() === pod.toLowerCase());
+  const target =
+    visible.find((p) => p.id === pod || p.clientId === pod) ?? (byName.length === 1 ? byName[0] : undefined);
   if (!target) {
+    if (byName.length > 1) {
+      throw new Error(`Several pods are named "${pod}"; pass the id instead.`);
+    }
     if (visible.length === 0) {
       throw new Error(
         "This key cannot see any pod. Use an account key (to mint a pod key) or the pod's own key.",
@@ -236,7 +242,7 @@ export const setupAdapter: typeof baseSetupAdapter = {
       );
       return {
         ...i,
-        podId: result.podId,
+        pod: result.podId,
         inboxId: undefined,
         ...(result.apiKey ? { apiKey: result.apiKey } : {}),
       } as typeof input;
@@ -289,7 +295,7 @@ export const openmailSetupContract = defineChannelSetupContract({
       cli: {
         flags: "--pod <id>",
         description:
-          "Cover a whole pod instead of one inbox: every inbox in it, including ones the agent creates later. Pod id or clientId; a pod-scoped key is minted from an account key.",
+          "Cover a whole pod instead of one inbox: every inbox in it, including ones the agent creates later. Pod id, clientId or name; a pod-scoped key is minted from an account key.",
       },
     },
     mailboxName: {

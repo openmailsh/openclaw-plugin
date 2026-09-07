@@ -67,8 +67,8 @@ openclaw openmail --account outreach -- send --inbox-id <id> --thread-id <thr> -
 
 New inboxes stream inbound mail within a minute (the gateway re-subscribes on
 a timer). Each `(inbox, sender)` pair is its own conversation, replies go out
-from the inbox that received the mail, and `--pod` accepts the pod id or its
-`clientId`. Trade-off: the stored key can read every inbox in the pod, not one.
+from the inbox that received the mail, and `--pod` accepts the pod id, its
+`clientId`, or its name. Trade-off: the stored key can read every inbox in the pod, not one.
 
 ## Security defaults
 

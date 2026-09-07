@@ -110,6 +110,12 @@ describe("provisionOpenMailPod", () => {
     expect(api.mintPodKey).toHaveBeenCalledWith("pod_1", "openclaw:team");
   });
 
+  it("resolves a unique name", async () => {
+    const api = podApi();
+    const out = await provisionOpenMailPod({ api, accountId: "team", pod: "team a", log: () => {} });
+    expect(out.podId).toBe("pod_1");
+  });
+
   it("keeps a pod key as-is (pod mint 403, inbox mint works)", async () => {
     const revokeInboxKey = vi.fn(async () => undefined);
     const api = podApi({ mintPodKey: vi.fn(async () => null), revokeInboxKey });
@@ -156,7 +162,7 @@ describe("setup pod shape", () => {
       inboxId: "inb_1",
       podId: null,
     });
-    const after = apply({ apiKey: "omk_pod", podId: "pod_1" }, before);
+    const after = apply({ apiKey: "omk_pod", pod: "pod_1" }, before);
     expect(resolveOpenMailAccount({ cfg: after, accountId: "team" })).toMatchObject({
       scope: "pod",
       inboxId: null,
@@ -167,7 +173,7 @@ describe("setup pod shape", () => {
 
   it("a named pod account does not inherit the root inbox", () => {
     const cfg = apply(
-      { apiKey: "omk_pod", podId: "pod_1" },
+      { apiKey: "omk_pod", pod: "pod_1" },
       { channels: { openmail: { apiKey: "k", inboxId: "inb_root" } } },
     );
     expect(resolveOpenMailAccount({ cfg, accountId: "team" })).toMatchObject({ scope: "pod", inboxId: null });
