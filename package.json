@@ -58,6 +58,13 @@
       "docsLabel": "openmail",
       "blurb": "Email for agents. Your agent gets its own address: it can receive mail, reply in-thread, send, and read attachments. Choose whether inbound mail wakes it, notifies you, or waits until asked.",
       "order": 80,
+      "configuredState": {
+        "env": {
+          "allOf": [
+            "OPENMAIL_API_KEY"
+          ]
+        }
+      },
       "setup": {
         "fields": [
           {

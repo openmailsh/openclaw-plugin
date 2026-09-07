@@ -181,9 +181,10 @@ Credentials come from the channel config only. `--api-key`, `--base-url` and
 }
 ```
 
-`apiKey` accepts OpenClaw SecretRefs (`env`, `file`, `exec`, `store`); the
-host resolves them before the channel starts, so the key never sits in
-`openclaw.json`. There are no `OPENMAIL_*` env fallbacks.
+`OPENMAIL_API_KEY`, `OPENMAIL_INBOX_ID` and `OPENMAIL_BASE_URL` are env
+fallbacks for the default account. `apiKey` accepts OpenClaw SecretRefs
+(`env`, `file`, `exec`, `store`); the host resolves them before the channel
+starts, so the key never sits in `openclaw.json`.
 
 ## Known gaps
 
