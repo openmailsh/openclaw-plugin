@@ -16,7 +16,7 @@ openclaw channels add --channel openmail --api-key <key>
 openclaw gateway restart
 ```
 
-Keys come from [app.openmail.sh](https://app.openmail.sh) or the
+Keys come from the [console](https://console.openmail.sh/api-keys) or the
 [OpenMail CLI](https://github.com/openmailsh/cli) (`openmail inbox keys create`).
 
 ## What `channels add` does with the key
@@ -43,9 +43,9 @@ openclaw channels status
 # - OpenMail sales:   enabled, configured, running, connected
 ```
 
-**One account per pod.** A pod is an OpenMail group of inboxes. The account
-holds a pod-scoped key and covers every inbox in the pod, including ones the
-agent creates later:
+**One account per pod.** A [pod](https://console.openmail.sh/pods) is an
+OpenMail group of inboxes. The account holds a pod-scoped key and covers every
+inbox in the pod, including ones the agent creates later:
 
 ```bash
 openclaw channels add --channel openmail --account outreach --api-key <account key> --pod outreach
@@ -108,8 +108,9 @@ to stay open because an agent that signs up for things must receive mail from
 strangers. So the defences are on what the agent can do, not on who can write.
 
 - **Sender rules live in OpenMail.** Who may email an inbox is decided by
-  OpenMail's allow/block policy (console or `openmail policy …`) before
-  delivery. The plugin keeps no second list.
+  OpenMail's allow/block policy
+  ([console](https://console.openmail.sh/sender-rules) or `openmail policy …`)
+  before delivery. The plugin keeps no second list.
 - **Narrow key.** An inbox account stores an inbox-scoped key; it can't list
   other inboxes, mint keys or change policy. A pod account stores a pod key.
 - **Re-authorized replies.** The websocket frame is a hint. Before the agent
@@ -189,7 +190,8 @@ starts, so the key never sits in `openclaw.json`.
 
 - No pairing flow for unknown senders; use OpenMail's policy instead.
 - If the config write fails after a key was minted, the key is left behind.
-  Harmless (10-key cap per inbox) and visible in the dashboard.
+  Harmless (10-key cap per inbox) and visible under
+  [API keys](https://console.openmail.sh/api-keys).
 
 ## Develop
 

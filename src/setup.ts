@@ -257,7 +257,7 @@ export const setupAdapter: typeof baseSetupAdapter = {
     const current = resolveOpenMailAccount({ cfg, accountId });
     const apiKey = normalizeOptionalString(i.apiKey) ?? current.apiKey;
     if (!apiKey) {
-      return "OpenMail needs an API key (--api-key). Create one with `openmail inbox keys create` or at https://app.openmail.sh.";
+      return "OpenMail needs an API key (--api-key). Create one with `openmail inbox keys create` or at https://console.openmail.sh/api-keys.";
     }
     return null;
   },
@@ -326,7 +326,7 @@ export const openmailSetupPlugin: ChannelPlugin<ResolvedOpenMailAccount> = {
       configuredLabel: "configured",
       unconfiguredLabel: "needs an API key and inbox id",
       configuredHint: "configured",
-      unconfiguredHint: "create an inbox at app.openmail.sh",
+      unconfiguredHint: "create an inbox at console.openmail.sh/inboxes",
       configuredScore: 1,
       unconfiguredScore: 3,
       resolveConfigured: ({ cfg, accountId }) =>
@@ -339,7 +339,7 @@ export const openmailSetupPlugin: ChannelPlugin<ResolvedOpenMailAccount> = {
     introNote: {
       title: "OpenMail setup",
       lines: [
-        "Paste any OpenMail API key (dashboard: app.openmail.sh -> API keys).",
+        "Paste any OpenMail API key (console.openmail.sh/api-keys).",
         "With an account key, OpenClaw picks your inbox (or creates one if you have none)",
         "and mints an inbox-scoped key for it; the account key itself is never stored.",
         `Docs: ${formatDocsLink("/channels/openmail", "channels/openmail")}`,
