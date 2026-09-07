@@ -30,9 +30,6 @@ Keys come from [app.openmail.sh](https://app.openmail.sh) or the
 | `--pod <id\|name>` | one account for a whole pod, see [Several inboxes](#several-inboxes) |
 | `--mode notify` / `--mode tool` | how inbound mail reaches the agent, see [Modes](#modes) |
 
-The address is printed at the end. Running it again against an existing
-account changes nothing.
-
 ## Several inboxes
 
 **One account per inbox.** Each has its own key, websocket and status line,
