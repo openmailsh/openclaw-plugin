@@ -78,7 +78,7 @@ export function createIngress(params: {
   } catch (error) {
     if (!isTrustRefusal(error)) throw error;
     ctx.log?.warn?.(
-      "openmail: durable ingress needs a trusted install (npm/ClawHub); this path-linked install retries in memory only",
+      "openmail: durable ingress needs a trusted install (npm with provenance, or ClawHub); this install is untrusted, so retries are in memory only. Check: openclaw plugins inspect openmail",
     );
     return { ingress: createMemoryIngress(params), cursor: createFileCursor(ctx.accountId) };
   }
