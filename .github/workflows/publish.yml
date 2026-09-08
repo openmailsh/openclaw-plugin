@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  publish:
+  npm:
     runs-on: ubuntu-latest
     permissions:
       contents: write # GitHub Release
@@ -27,9 +27,33 @@ jobs:
       # prepublishOnly runs `pnpm check` (typecheck, tests, build, manifest, throwaway host).
       # No token: the registry trusts this repo + workflow via OIDC.
       - run: npm publish --provenance --access public
+      # The exact tarball npm got, for ClawHub below.
+      - run: npm pack --pack-destination "$RUNNER_TEMP/pack"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-tgz
+          path: ${{ runner.temp }}/pack/*.tgz
+          if-no-files-found: error
       - name: GitHub Release
         run: |
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
             || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Tag-push publishes to ClawHub need a token; OIDC-only is workflow_dispatch.
+  # Waits for the security scan and fails the run if ClawHub blocks the release.
+  clawhub:
+    needs: npm
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    uses: openclaw/clawhub/.github/workflows/package-publish.yml@main
+    with:
+      package_artifact_name: package-tgz
+      owner: openmail
+      family: code-plugin
+      dry_run: false
+    secrets:
+      clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
