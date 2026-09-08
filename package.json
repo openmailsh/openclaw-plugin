@@ -22,7 +22,8 @@
     "manifest": "node scripts/build-manifest.mjs",
     "manifest:check": "node scripts/build-manifest.mjs --check",
     "validate-plugin": "node scripts/validate-plugin.mjs",
-    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm manifest:check && pnpm validate-plugin",
+    "validate-clawhub": "node scripts/clawhub-validate.mjs",
+    "check": "pnpm typecheck && pnpm test && pnpm build && pnpm manifest:check && pnpm validate-plugin && pnpm validate-clawhub",
     "prepublishOnly": "pnpm check"
   },
   "dependencies": {
