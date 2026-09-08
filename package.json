@@ -26,9 +26,9 @@
     "prepublishOnly": "pnpm check"
   },
   "dependencies": {
+    "@openmail/cli": "^0.6.1",
     "ws": "^8.18.0",
-    "zod": "4.4.3",
-    "@openmail/cli": "^0.5.1"
+    "zod": "4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
