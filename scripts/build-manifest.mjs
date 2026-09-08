@@ -58,7 +58,6 @@ const openclawBlock = {
   setupEntry: "./dist/setup-entry.js",
   channel: {
     ...OPENMAIL_META,
-    configuredState: { env: { allOf: ["OPENMAIL_API_KEY"] } },
     setup: { fields: openmailSetupContract.metadata.fields },
   },
   compat: { pluginApi: `>=${hostVersion}`, minGatewayVersion: hostVersion },

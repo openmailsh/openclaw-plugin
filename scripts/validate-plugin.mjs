@@ -22,8 +22,6 @@ const env = {
   NO_COLOR: "1",
   FORCE_COLOR: "0",
 };
-delete env.OPENMAIL_API_KEY;
-delete env.OPENMAIL_INBOX_ID;
 
 process.on("exit", () => rmSync(stateDir, { recursive: true, force: true }));
 
