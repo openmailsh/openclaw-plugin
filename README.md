@@ -19,6 +19,10 @@ openclaw gateway restart
 Keys come from the [console](https://console.openmail.sh/api-keys) or the
 [OpenMail CLI](https://github.com/openmailsh/cli) (`openmail inbox keys create`).
 
+Reinstalling after an uninstall? OpenClaw keeps the plugin disabled; run
+`openclaw plugins enable openmail` first or `channels add` reports
+`Unknown channel "openmail"`.
+
 ## What `channels add` does with the key
 
 | You pass | Result |
