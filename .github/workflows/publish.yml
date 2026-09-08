@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'v*'
+  # Re-run for a version already on npm (e.g. ClawHub failed): skips npm, publishes ClawHub.
+  workflow_dispatch:
 
 jobs:
   npm:
@@ -24,11 +26,23 @@ jobs:
       # Trusted publishing needs npm >= 11.5; Node 22 ships 10.x.
       - run: npm install -g npm@latest
       - run: pnpm install --frozen-lockfile
+      - name: Already on npm?
+        id: published
+        run: |
+          name=$(jq -r .name package.json); version=$(jq -r .version package.json)
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"; echo "$name@$version is already published"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
       # prepublishOnly runs `pnpm check` (typecheck, tests, build, manifest, throwaway host).
       # No token: the registry trusts this repo + workflow via OIDC.
-      - run: npm publish --provenance --access public
+      - if: steps.published.outputs.skip != 'true'
+        run: npm publish --provenance --access public
+      - if: steps.published.outputs.skip == 'true'
+        run: pnpm check
       # The exact tarball npm got, for ClawHub below.
-      - run: npm pack --pack-destination "$RUNNER_TEMP/pack"
+      - run: mkdir -p "$RUNNER_TEMP/pack" && npm pack --pack-destination "$RUNNER_TEMP/pack"
       - uses: actions/upload-artifact@v4
         with:
           name: package-tgz
