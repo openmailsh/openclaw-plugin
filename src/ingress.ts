@@ -1,9 +1,10 @@
 // Inbound event admission. Two implementations behind one surface:
 //
 //  durable  SDK ingress queue + drain (dedupe by event_id, crash-safe rows,
-//           backoff retries, dead-letter). Only for trusted installs: ClawHub,
-//           or npm with a valid provenance attestation. The host refuses the
-//           state APIs to anything else (path links, hand-published tarballs).
+//           backoff retries, dead-letter). The host grants the state APIs only
+//           to plugins in its official external-plugin catalog; npm provenance
+//           and ClawHub listing alone do not qualify (checked against the
+//           2026.9 host source).
 //  memory   Serial in-process dispatch with bounded retries and a file cursor.
 //           Loses in-flight events on a crash, but the server replays from the
 //           cursor on reconnect so nothing is permanently lost.
@@ -79,7 +80,7 @@ export function createIngress(params: {
   } catch (error) {
     if (!isTrustRefusal(error)) throw error;
     ctx.log?.warn?.(
-      "openmail: durable ingress needs a trusted install (npm with provenance, or ClawHub); this install is untrusted, so retries are in memory only. Check: openclaw plugins inspect openmail",
+      "openmail: durable ingress is reserved for plugins in OpenClaw's official catalog; this install retries in memory only (see: openclaw plugins inspect openmail)",
     );
     return { ingress: createMemoryIngress(params), cursor: createFileCursor(ctx.accountId) };
   }

@@ -37,11 +37,13 @@ const manifest = {
   },
   configSchema: { type: "object", additionalProperties: false, properties: {} },
   // apiKey may be a SecretRef; the host resolves it before the channel reads it.
-  secretInputs: {
-    paths: [
-      { path: "channels.openmail.apiKey", expected: "string" },
-      { path: "channels.openmail.accounts.*.apiKey", expected: "string" },
-    ],
+  configContracts: {
+    secretInputs: {
+      paths: [
+        { path: "channels.openmail.apiKey", expected: "string" },
+        { path: "channels.openmail.accounts.*.apiKey", expected: "string" },
+      ],
+    },
   },
   skills: ["skills"],
   cliCommands: [

@@ -387,17 +387,19 @@
     "additionalProperties": false,
     "properties": {}
   },
-  "secretInputs": {
-    "paths": [
-      {
-        "path": "channels.openmail.apiKey",
-        "expected": "string"
-      },
-      {
-        "path": "channels.openmail.accounts.*.apiKey",
-        "expected": "string"
-      }
-    ]
+  "configContracts": {
+    "secretInputs": {
+      "paths": [
+        {
+          "path": "channels.openmail.apiKey",
+          "expected": "string"
+        },
+        {
+          "path": "channels.openmail.accounts.*.apiKey",
+          "expected": "string"
+        }
+      ]
+    }
   },
   "skills": [
     "skills"
