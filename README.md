@@ -120,11 +120,11 @@ strangers. So the defences are on what the agent can do, not on who can write.
 - **Re-authorized replies.** The websocket frame is a hint. Before the agent
   sees anything, the message is fetched again from the API and the reply goes
   to the API's `From`, so a forged frame can't redirect it.
-- **Nothing dropped silently.** Installed from npm, events pass through
-  OpenClaw's durable ingress queue: deduped by `event_id`, written to disk
-  before the agent runs, retried with backoff, dead-lettered instead of lost.
-  A path-linked dev install retries in memory (2s, 10s, 30s). Both persist
-  the cursor, so a gateway restart replays whatever arrived while it was down.
+- **Nothing dropped silently.** Events pass through OpenClaw's durable
+  ingress queue: deduped by `event_id`, written to disk before the agent
+  runs, retried with backoff, dead-lettered instead of lost. The cursor
+  persists too, so a gateway restart replays whatever arrived while it was
+  down.
 
 ## The bundled CLI skill
 
