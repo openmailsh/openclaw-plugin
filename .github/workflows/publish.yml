@@ -19,10 +19,19 @@ jobs:
     permissions:
       contents: write # GitHub Release
       id-token: write # npm trusted publishing (OIDC)
+    outputs:
+      tag: ${{ steps.src.outputs.tag }}
+      sha: ${{ steps.src.outputs.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
+      - id: src
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: pnpm/action-setup@v4
         with:
           version: 11
@@ -59,13 +68,14 @@ jobs:
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+          TAG: ${{ steps.src.outputs.tag }}
         run: |
           gh release view "$TAG" >/dev/null 2>&1 \
             || gh release create "$TAG" --title "$TAG" --generate-notes
 
   # Tag-push publishes to ClawHub need a token; OIDC-only is workflow_dispatch.
   # Waits for the security scan and fails the run if ClawHub blocks the release.
+  # Source attribution is passed explicitly: on a dispatch the run's own ref is main.
   clawhub:
     needs: npm
     permissions:
@@ -78,5 +88,8 @@ jobs:
       owner: openmail
       family: code-plugin
       dry_run: false
+      source_repo: ${{ github.repository }}
+      source_commit: ${{ needs.npm.outputs.sha }}
+      source_ref: refs/tags/${{ needs.npm.outputs.tag }}
     secrets:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
