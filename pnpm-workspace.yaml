@@ -6,4 +6,4 @@ allowBuilds:
   protobufjs: false
   tree-sitter-bash: false
 minimumReleaseAgeExclude:
-  - '@openmail/cli@0.6.1'
+  - '@openmail/cli@0.6.1 || 0.7.0'
