@@ -5,7 +5,13 @@ on:
     tags:
       - 'v*'
   # Re-run for a version already on npm (e.g. ClawHub failed): skips npm, publishes ClawHub.
+  # Dispatch from the default branch (so this YAML loads) with the tag to publish.
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish (e.g. v0.1.2)
+        required: true
+        type: string
 
 jobs:
   npm:
@@ -15,6 +21,8 @@ jobs:
       id-token: write # npm trusted publishing (OIDC)
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
       - uses: pnpm/action-setup@v4
         with:
           version: 11
@@ -49,11 +57,12 @@ jobs:
           path: ${{ runner.temp }}/pack/*.tgz
           if-no-files-found: error
       - name: GitHub Release
-        run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
-            || gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          gh release view "$TAG" >/dev/null 2>&1 \
+            || gh release create "$TAG" --title "$TAG" --generate-notes
 
   # Tag-push publishes to ClawHub need a token; OIDC-only is workflow_dispatch.
   # Waits for the security scan and fails the run if ClawHub blocks the release.
