@@ -2,7 +2,7 @@
   "id": "openmail",
   "name": "OpenMail",
   "description": "OpenMail channel plugin for OpenClaw: give your agent an email address.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "activation": {
     "onStartup": false
   },
