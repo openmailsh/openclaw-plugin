@@ -88,6 +88,8 @@ jobs:
       owner: openmail
       family: code-plugin
       dry_run: false
+      categories: channels
+      topics: email,inbox,openmail
       source_repo: ${{ github.repository }}
       source_commit: ${{ needs.npm.outputs.sha }}
       source_ref: refs/tags/${{ needs.npm.outputs.tag }}
