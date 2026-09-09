@@ -28,7 +28,7 @@ Reinstalling after an uninstall? OpenClaw keeps the plugin disabled; run
 | You pass | Result |
 | --- | --- |
 | an inbox-scoped key | stored as-is; that inbox is the channel |
-| an account or pod key | picks your inbox (creates one if you have none), mints an inbox-scoped key for it and stores only that. The broad key never touches `openclaw.json`. |
+| an account or pod key | picks your inbox (creates one if you have none), mints a pod-scoped key for its pod and stores only that. An account key never touches `openclaw.json`; a pod key can still create inboxes and later cover the whole pod (`--pod`) without a new key. |
 | `--mailbox-name sales` | creates `sales@omail.sh`; `--display-name "Sales bot"` sets the sender name |
 | `--inbox-id <id>` | uses that inbox; needed when the key can see several |
 | `--pod <id\|name>` | one account for a whole pod, see [Several inboxes](#several-inboxes) |

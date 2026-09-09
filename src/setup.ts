@@ -84,15 +84,16 @@ const baseSetupAdapter = createPatchedAccountSetupAdapter({
 });
 
 /**
- * Turn whatever key the user gave us into the narrowest key that works.
+ * Turn whatever key the user gave us into the narrowest key that still lets
+ * the agent grow.
  *
- *   inbox-scoped key      -> stored as-is (it cannot mint; 403 tells us so)
- *   account/pod key       -> pick or create the inbox, mint an inbox-scoped
- *                            key for it, store THAT. The broad key is never
- *                            written to openclaw.json.
+ *   inbox- or pod-scoped key -> stored as-is (it cannot mint pod keys; 403 tells us so)
+ *   account key              -> pick or create the inbox, mint a pod-scoped key
+ *                               for its pod, store THAT. The account key is
+ *                               never written to openclaw.json.
  *
  * Re-running against an already-provisioned account is a no-op: the stored
- * key is inbox-scoped, so the 403 path short-circuits.
+ * key is pod- or inbox-scoped, so the 403 path short-circuits.
  */
 export async function provisionOpenMailAccount(params: {
   api: OpenMailApi;
@@ -128,12 +129,16 @@ export async function provisionOpenMailAccount(params: {
       : `Using OpenMail inbox ${inbox.address} (${inbox.id}).`,
   );
 
-  const minted = await api.mintInboxKey(inbox.id, `openclaw:${accountId}`);
+  // Narrow to the inbox's pod, not the inbox. A pod key still lets the agent
+  // create inboxes and mint inbox keys, and switching this account to cover the
+  // whole pod later is a config change, not a new key from the console. It
+  // cannot reach other pods, webhooks or account-wide policy.
+  const minted = inbox.podId ? await api.mintPodKey(inbox.podId, `openclaw:${accountId}`) : null;
   if (!minted) {
-    // 403: the key we hold is already inbox-scoped. Nothing to narrow.
+    // 403 (or no pod): the key we hold is already pod- or inbox-scoped. Nothing to narrow.
     return { inboxId: inbox.id, address: inbox.address, created };
   }
-  log(`Minted an inbox-scoped API key for ${inbox.address}; the key you passed is not stored.`);
+  log(`Minted a pod-scoped API key for ${inbox.address}'s pod; the account key you passed is not stored.`);
   return { inboxId: inbox.id, apiKey: minted.token, address: inbox.address, created };
 }
 
@@ -268,7 +273,7 @@ export const openmailSetupContract = defineChannelSetupContract({
     apiKey: {
       kind: "string",
       sensitive: true,
-      cli: { flags: "--api-key <key>", description: "OpenMail API key (any scope; an inbox-scoped key is minted for you)" },
+      cli: { flags: "--api-key <key>", description: "OpenMail API key (any scope; an account key is swapped for a pod-scoped one)" },
     },
     inboxId: {
       kind: "string",
@@ -341,7 +346,7 @@ export const openmailSetupPlugin: ChannelPlugin<ResolvedOpenMailAccount> = {
       lines: [
         "Paste any OpenMail API key (console.openmail.sh/api-keys).",
         "With an account key, OpenClaw picks your inbox (or creates one if you have none)",
-        "and mints an inbox-scoped key for it; the account key itself is never stored.",
+        "and mints a pod-scoped key for its pod; the account key itself is never stored.",
         `Docs: ${formatDocsLink("/channels/openmail", "channels/openmail")}`,
       ],
     },

@@ -3,14 +3,15 @@ import type { OpenMailApi, OpenMailInbox } from "./openmail-api.js";
 import { provisionOpenMailAccount, provisionOpenMailPod, setupAdapter } from "./setup.js";
 import { resolveOpenMailAccount } from "./accounts.js";
 
-const inbox: OpenMailInbox = { id: "inb_1", address: "sales@omail.sh" };
+const inbox: OpenMailInbox = { id: "inb_1", address: "sales@omail.sh", podId: "pod_1" };
 
 function mockApi(over: Partial<Record<keyof OpenMailApi, unknown>> = {}) {
   return {
     getInbox: vi.fn(async () => inbox),
     createInbox: vi.fn(async () => ({ ...inbox, id: "inb_new", address: "new@omail.sh" })),
     resolveInbox: vi.fn(async () => ({ kind: "resolved" as const, inbox, created: false })),
-    mintInboxKey: vi.fn(async () => ({ id: "key_1", token: "omk_scoped" })),
+    mintPodKey: vi.fn(async () => ({ id: "key_1", token: "omk_scoped" })),
+    mintInboxKey: vi.fn(async () => ({ id: "key_1", token: "omk_inbox" })),
     ...over,
   } as unknown as OpenMailApi & Record<string, ReturnType<typeof vi.fn>>;
 }
@@ -18,15 +19,15 @@ function mockApi(over: Partial<Record<keyof OpenMailApi, unknown>> = {}) {
 describe("provisionOpenMailAccount", () => {
   const base = { accountId: "sales", create: {}, log: () => {} };
 
-  it("resolves the key's single inbox and mints a scoped key", async () => {
+  it("resolves the key's single inbox and mints a pod key for its pod, not an inbox key", async () => {
     const api = mockApi();
     const out = await provisionOpenMailAccount({ ...base, api });
     expect(out).toEqual({ inboxId: "inb_1", apiKey: "omk_scoped", address: "sales@omail.sh", created: false });
-    expect(api.mintInboxKey).toHaveBeenCalledWith("inb_1", "openclaw:sales");
+    expect(api.mintPodKey).toHaveBeenCalledWith("pod_1", "openclaw:sales");
   });
 
-  it("does not store a key when the one given is already inbox-scoped (mint 403)", async () => {
-    const api = mockApi({ mintInboxKey: vi.fn(async () => null) });
+  it("does not store a key when the one given is already pod- or inbox-scoped (mint 403)", async () => {
+    const api = mockApi({ mintPodKey: vi.fn(async () => null) });
     const out = await provisionOpenMailAccount({ ...base, api });
     expect(out.apiKey).toBeUndefined();
   });
@@ -46,7 +47,7 @@ describe("provisionOpenMailAccount", () => {
       })),
     });
     await expect(provisionOpenMailAccount({ ...base, api })).rejects.toThrow(/--inbox-id/);
-    expect(api.mintInboxKey).not.toHaveBeenCalled();
+    expect(api.mintPodKey).not.toHaveBeenCalled();
   });
 
   it("uses an explicit inboxId without creating or resolving", async () => {
