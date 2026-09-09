@@ -32,6 +32,18 @@ describe("provisionOpenMailAccount", () => {
     expect(out.apiKey).toBeUndefined();
   });
 
+  it("falls back to an inbox key when the inbox has no podId (never leaves an account key)", async () => {
+    const noPod = { id: "inb_1", address: "sales@omail.sh", podId: null };
+    const api = mockApi({
+      resolveInbox: vi.fn(async () => ({ kind: "resolved" as const, inbox: noPod, created: false })),
+      mintInboxKey: vi.fn(async () => ({ id: "key_i", token: "omk_inbox" })),
+    });
+    const out = await provisionOpenMailAccount({ ...base, api });
+    expect(out).toEqual({ inboxId: "inb_1", apiKey: "omk_inbox", address: "sales@omail.sh", created: false });
+    expect(api.mintPodKey).not.toHaveBeenCalled();
+    expect(api.mintInboxKey).toHaveBeenCalledWith("inb_1", "openclaw:sales");
+  });
+
   it("creates an inbox when asked and never touches server-side policy", async () => {
     const api = mockApi();
     await provisionOpenMailAccount({ ...base, api, create: { mailboxName: "sales" } });
