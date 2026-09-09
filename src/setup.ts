@@ -87,10 +87,11 @@ const baseSetupAdapter = createPatchedAccountSetupAdapter({
  * Turn whatever key the user gave us into the narrowest key that still lets
  * the agent grow.
  *
- *   inbox- or pod-scoped key -> stored as-is (it cannot mint pod keys; 403 tells us so)
+ *   inbox- or pod-scoped key -> stored as-is (it cannot mint; 403 tells us so)
  *   account key              -> pick or create the inbox, mint a pod-scoped key
- *                               for its pod, store THAT. The account key is
- *                               never written to openclaw.json.
+ *                               for its pod (or an inbox key if the inbox has
+ *                               no pod), store THAT. The account key is never
+ *                               written to openclaw.json.
  *
  * Re-running against an already-provisioned account is a no-op: the stored
  * key is pod- or inbox-scoped, so the 403 path short-circuits.
@@ -133,12 +134,20 @@ export async function provisionOpenMailAccount(params: {
   // create inboxes and mint inbox keys, and switching this account to cover the
   // whole pod later is a config change, not a new key from the console. It
   // cannot reach other pods, webhooks or account-wide policy.
-  const minted = inbox.podId ? await api.mintPodKey(inbox.podId, `openclaw:${accountId}`) : null;
+  // No podId: fall back to an inbox key. Skipping mint would leave the caller's
+  // account key in openclaw.json — missing podId is not evidence the key is scoped.
+  const minted = inbox.podId
+    ? await api.mintPodKey(inbox.podId, `openclaw:${accountId}`)
+    : await api.mintInboxKey(inbox.id, `openclaw:${accountId}`);
   if (!minted) {
-    // 403 (or no pod): the key we hold is already pod- or inbox-scoped. Nothing to narrow.
+    // 403: the key we hold is already pod- or inbox-scoped. Nothing to narrow.
     return { inboxId: inbox.id, address: inbox.address, created };
   }
-  log(`Minted a pod-scoped API key for ${inbox.address}'s pod; the account key you passed is not stored.`);
+  log(
+    inbox.podId
+      ? `Minted a pod-scoped API key for ${inbox.address}'s pod; the account key you passed is not stored.`
+      : `Minted an inbox-scoped API key for ${inbox.address}; the account key you passed is not stored.`,
+  );
   return { inboxId: inbox.id, apiKey: minted.token, address: inbox.address, created };
 }
 
