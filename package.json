@@ -66,7 +66,7 @@
             "sensitive": true,
             "cli": {
               "flags": "--api-key <key>",
-              "description": "OpenMail API key (any scope; an inbox-scoped key is minted for you)"
+              "description": "OpenMail API key (any scope; an account key is swapped for a pod-scoped one)"
             },
             "key": "apiKey"
           },
