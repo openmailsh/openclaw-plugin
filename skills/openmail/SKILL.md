@@ -74,7 +74,9 @@ openclaw openmail -- send --to "person@example.com" --subject "Subject" --body "
 openclaw openmail -- send --to "person@example.com" --subject "Report" --body "<p>See attached.</p>" --attach ./report.pdf
 ```
 
-`--body` is plain text or HTML (detected). `--attach <path>` is repeatable.
+`--body` is plain text or HTML (detected). `--attach <path>`, `--cc <address>` and
+`--bcc <address>` are repeatable. Use `--bcc` for blind copies the other
+recipients must not see, such as a CRM logging address.
 The response has `messageId` and `threadId`; keep `threadId` to continue later.
 
 If a send is rejected by an outbound policy rule, tell the user; do not work
