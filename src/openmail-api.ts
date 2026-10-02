@@ -1,6 +1,16 @@
 // Minimal OpenMail REST client. Only what the channel needs: inbox lookup,
 // in-thread replies, attachment text. Everything else stays in the CLI.
 import { randomUUID } from "node:crypto";
+import { createRequire } from "node:module";
+
+const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
+
+// Lets the API attribute usage to this plugin (`api_keys.lastClient`,
+// `inboxes.createdVia`). Keep both in sync with `lib/api-client.ts` in the API.
+export const CLIENT_HEADERS: Readonly<Record<string, string>> = {
+  "X-OpenMail-Client": "openclaw",
+  "User-Agent": `openmail-openclaw/${version}`,
+};
 
 export type OpenMailInbox = {
   id: string;
@@ -211,7 +221,7 @@ export class OpenMailApi {
   ): Promise<{ buffer: Buffer; contentType: string | undefined }> {
     const response = await fetch(
       `${this.baseUrl}/v1/attachments/${encodeURIComponent(messageId)}/${encodeURIComponent(filename)}`,
-      { headers: { Authorization: `Bearer ${this.apiKey}` } },
+      { headers: { ...CLIENT_HEADERS, Authorization: `Bearer ${this.apiKey}` } },
     );
     if (!response.ok) {
       throw new OpenMailApiError(
@@ -290,6 +300,7 @@ export class OpenMailApi {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers: {
+        ...CLIENT_HEADERS,
         Authorization: `Bearer ${this.apiKey}`,
         "Content-Type": "application/json",
         ...extraHeaders,
