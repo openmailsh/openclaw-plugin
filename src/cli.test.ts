@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { buildCliEnv, findBlockedFlag, resolveBundledCliPath } from "./cli.js";
+import { buildCliEnv, cliSecretPaths, findBlockedFlag, resolveBundledCliPath } from "./cli.js";
+
+describe("cliSecretPaths", () => {
+  it("covers the account's own apiKey and the inheritable root one, nothing else", () => {
+    expect([...cliSecretPaths("work")].sort()).toEqual([
+      "channels.openmail.accounts.work.apiKey",
+      "channels.openmail.apiKey",
+    ]);
+  });
+
+  it("normalises the account id the way the config stores it", () => {
+    expect(cliSecretPaths(" Work ")).toContain("channels.openmail.accounts.work.apiKey");
+  });
+});
 
 describe("findBlockedFlag", () => {
   it("catches credential/endpoint flags in both spellings", () => {
