@@ -9,6 +9,7 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
+import { normalizeAccountId } from "openclaw/plugin-sdk/account-id";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
 import { resolveCommandSecretRefsViaGateway } from "openclaw/plugin-sdk/runtime";
 import {
@@ -26,12 +27,13 @@ const SECRET_TARGET_IDS = new Set(secretTargetRegistryEntries.map((entry) => ent
 /**
  * Config paths whose SecretRefs this command needs: the account's own apiKey
  * and the root one it may inherit. Other accounts' refs are left alone so an
- * unrelated unresolvable ref cannot block this one.
+ * unrelated unresolvable ref cannot block this one. The id is normalised the
+ * same way the config stores it, so `--account Work` finds `accounts.work`.
  */
 export function cliSecretPaths(accountId: string): Set<string> {
   return new Set([
     `channels.${OPENMAIL_CHANNEL_ID}.apiKey`,
-    `channels.${OPENMAIL_CHANNEL_ID}.accounts.${accountId}.apiKey`,
+    `channels.${OPENMAIL_CHANNEL_ID}.accounts.${normalizeAccountId(accountId)}.apiKey`,
   ]);
 }
 

@@ -8,6 +8,10 @@ describe("cliSecretPaths", () => {
       "channels.openmail.apiKey",
     ]);
   });
+
+  it("normalises the account id the way the config stores it", () => {
+    expect(cliSecretPaths(" Work ")).toContain("channels.openmail.accounts.work.apiKey");
+  });
 });
 
 describe("findBlockedFlag", () => {
