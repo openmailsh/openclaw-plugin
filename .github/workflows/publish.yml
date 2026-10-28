@@ -76,13 +76,17 @@ jobs:
   # Tag-push publishes to ClawHub need a token; OIDC-only is workflow_dispatch.
   # Waits for the security scan and fails the run if ClawHub blocks the release.
   # Source attribution is passed explicitly: on a dispatch the run's own ref is main.
+  # Pinned: from 24f4d421 (Oct 15) the ClawHub CLI refuses to run `package validate`
+  # under bun, but the workflow still invokes it with bun, so every publish fails
+  # at "Run plugin validation". 911211fc is the last sha where both agree.
+  # Move back to @main once https://github.com/openclaw/clawhub fixes the step.
   clawhub:
     needs: npm
     permissions:
       actions: read
       contents: read
       id-token: write
-    uses: openclaw/clawhub/.github/workflows/package-publish.yml@main
+    uses: openclaw/clawhub/.github/workflows/package-publish.yml@911211fc6cc6384a2cdb3ca0eff6f9031afd25f0
     with:
       package_artifact_name: package-tgz
       owner: openmail
