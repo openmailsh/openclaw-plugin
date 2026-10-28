@@ -8,11 +8,49 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import path from "node:path";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/config-contracts";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
-import { resolveDefaultOpenMailAccountId, resolveOpenMailAccount } from "./accounts.js";
+import { resolveCommandSecretRefsViaGateway } from "openclaw/plugin-sdk/runtime";
+import {
+  OPENMAIL_CHANNEL_ID,
+  type ResolvedOpenMailAccount,
+  resolveDefaultOpenMailAccountId,
+  resolveOpenMailAccount,
+} from "./accounts.js";
+import { secretTargetRegistryEntries } from "./secret-contract.js";
 
 const BLOCKED_FLAGS = new Set(["--api-key", "--base-url", "--state-path"]);
 const STRIPPED_ENV = /^(https?_proxy|all_proxy|no_proxy)$/i;
+const SECRET_TARGET_IDS = new Set(secretTargetRegistryEntries.map((entry) => entry.id));
+
+/**
+ * Config paths whose SecretRefs this command needs: the account's own apiKey
+ * and the root one it may inherit. Other accounts' refs are left alone so an
+ * unrelated unresolvable ref cannot block this one.
+ */
+export function cliSecretPaths(accountId: string): Set<string> {
+  return new Set([
+    `channels.${OPENMAIL_CHANNEL_ID}.apiKey`,
+    `channels.${OPENMAIL_CHANNEL_ID}.accounts.${accountId}.apiKey`,
+  ]);
+}
+
+/**
+ * The CLI context hands plugins the raw config file, so a SecretRef apiKey is
+ * still `{ source, provider, id }` here. Ask the running gateway for the
+ * resolved value (falling back to local resolution) the way OpenClaw's own
+ * `message` command does, so this command works wherever sending does.
+ */
+async function resolveCliConfig(config: OpenClawConfig, accountId: string): Promise<OpenClawConfig> {
+  const { resolvedConfig, diagnostics } = await resolveCommandSecretRefsViaGateway({
+    config,
+    commandName: "openmail",
+    targetIds: SECRET_TARGET_IDS,
+    allowedPaths: cliSecretPaths(accountId),
+  });
+  for (const entry of diagnostics) console.error(`[secrets] ${entry}`);
+  return resolvedConfig;
+}
 
 export function resolveBundledCliPath(): string {
   const require = createRequire(import.meta.url);
@@ -56,7 +94,14 @@ export function registerOpenMailCli(api: OpenClawPluginApi): void {
         .argument("[args...]", "arguments passed to the openmail CLI (after --)")
         .action(async (args: string[], opts: { account?: string }) => {
           const accountId = opts.account ?? resolveDefaultOpenMailAccountId(config);
-          const account = resolveOpenMailAccount({ cfg: config, accountId });
+          let account: ResolvedOpenMailAccount;
+          try {
+            account = resolveOpenMailAccount({ cfg: await resolveCliConfig(config, accountId), accountId });
+          } catch (err) {
+            console.error(`failed to resolve OpenMail account "${accountId}": ${String(err)}`);
+            process.exitCode = 1;
+            return;
+          }
           if (!account.apiKey || !(account.inboxId || account.podId)) {
             console.error(
               `OpenMail account "${accountId}" is not configured. Run: openclaw channels add --channel openmail --api-key <key>`,
