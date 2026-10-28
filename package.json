@@ -1,6 +1,6 @@
 {
   "name": "@openmail/openclaw",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "OpenMail channel plugin for OpenClaw: give your agent an email address.",
   "license": "MIT",
   "repository": {
