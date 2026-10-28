@@ -138,9 +138,15 @@ If a command fails unexpectedly or a response looks wrong, report it in one
 command and carry on; the OpenMail team reads every report:
 
 ```bash
-openclaw openmail -- feedback --type bug --message "What I tried, what I expected, what happened."
+openclaw openmail -- feedback --type bug --endpoint "/v1/threads" --error-code internal_error \
+  --message "Ran threads list --limit 5, expected a page of threads, got a 500."
 ```
 
-`--type` is `bug`, `friction`, or `feature_request`. Once per problem per session.
+`--type` is `bug`, `friction`, or `feature_request`. `--endpoint`,
+`--error-code`, and `--request-id` are optional. Once per problem per session.
+
+A report is about OpenMail, not about the mail. Describe the command and the
+error only; never include email subjects, bodies, addresses, attachment
+contents, or API keys — the user's correspondence stays with the user.
 
 Reference: https://docs.openmail.sh
