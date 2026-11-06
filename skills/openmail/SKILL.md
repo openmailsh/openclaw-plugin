@@ -1,6 +1,6 @@
 ---
 name: openmail
-description: The agent has its own email address via OpenMail. Use this skill to send email, reply in a thread, read a thread, check for unread mail, or read an attachment. Also use it when the user says things like "reach out to them", "contact support", "sign up", "wait for their reply", "check if they responded", or "what did that PDF say" — even without the word "email".
+description: The agent has its own email address via OpenMail. Use this skill to create, find, review or send saved drafts, send email, reply in a thread, read a thread, check for unread mail, or read an attachment. Also use it when the user says things like "reach out to them", "contact support", "sign up", "wait for their reply", "check if they responded", or "what did that PDF say" — even without the word "email".
 metadata: {"openclaw":{"emoji":"📬","requires":{"bins":["openclaw"]}}}
 ---
 
@@ -36,7 +36,7 @@ Several accounts are configured? Add `--account <id>` before the `--`.
 ## Pod accounts: many inboxes, one key
 
 If inbound mail shows an `Inbox:` line, this account covers a whole pod.
-Pass `--inbox-id` on `send`, `threads list` and `messages list` so the right
+Pass `--inbox-id` on `send`, all `drafts` commands, `threads list` and `messages list` so the right
 inbox is used; replies must go from the inbox that received the mail.
 
 You can create more inboxes in the pod when a task calls for it (one per
@@ -82,6 +82,28 @@ The response has `messageId` and `threadId`; keep `threadId` to continue later.
 
 If a send is rejected by an outbound policy rule, tell the user; do not work
 around it.
+
+## Drafts
+
+Save email for review without sending:
+
+```bash
+openclaw openmail -- drafts create --to "person@example.com" --subject "Proposal" --body "Please review." --json
+openclaw openmail -- drafts list --query Proposal --json
+openclaw openmail -- drafts get --draft-id "<id>" --json
+```
+
+Draft fields are optional. `--cc` and `--bcc` are repeatable; `--body-html` adds HTML. Attachments are not supported for drafts. Show the saved To/Cc/Bcc, subject and body to the user. Creating or reviewing a draft does not authorize sending.
+
+When the user asks to send the reviewed draft:
+
+```bash
+openclaw openmail -- drafts send --draft-id "<id>" --updated-at "<exact updatedAt from drafts get>" --json
+```
+
+Use the reviewed version, not a freshly fetched timestamp substituted without review. If it changed, review the changes before retrying. Sending uses stored recipients/content and removes the draft only on success; failed or pending sends retain it. Do not copy a saved draft into `send`.
+
+These commands require a bundled CLI with draft support (`openclaw openmail -- help drafts`). If unavailable, report that the plugin needs updating; do not turn a request to save a draft into a send.
 
 ## Reading mail
 

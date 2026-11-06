@@ -215,3 +215,11 @@ generated from `src/config-schema.ts` and `src/setup.ts`. Edit those, then run
 
 Compiles against `openclaw@2026.9.2` (pinned in `devDependencies`); the
 generated `compat` and `install.minHostVersion` follow that pin.
+
+## Draft workflow
+
+The bundled skill supports saving, finding, reviewing and sending drafts through `openclaw openmail -- drafts create|list|get|send`. It uses the channel's existing credentials and inbox default; pod accounts pass `--inbox-id` and multiple accounts select `--account` before `--`.
+
+Sending requires `--draft-id` and the exact `--updated-at` from the reviewed draft. Incomplete drafts can be saved; failed sends retain the draft. No email is sent by create, list or get.
+
+Release dependency: deploy the draft API and release a draft-capable `@openmail/cli`, then update this plugin's CLI dependency and lockfile before releasing these instructions. Check `openclaw openmail -- help drafts` after installation.
