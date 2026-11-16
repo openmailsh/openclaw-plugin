@@ -101,7 +101,11 @@ When the user asks to send the reviewed draft:
 openclaw openmail -- drafts send --draft-id "<id>" --updated-at "<exact updatedAt from drafts get>" --json
 ```
 
-Use the reviewed version, not a freshly fetched timestamp substituted without review. If it changed, review the changes before retrying. Sending uses stored recipients/content and removes the draft only on success; failed or pending sends retain it. Do not copy a saved draft into `send`.
+Use the reviewed version, not a freshly fetched timestamp substituted without review. Sending uses stored recipients/content and removes the draft only on success; failed or pending sends retain it. Do not copy a saved draft into `send`.
+
+- `draft_changed`: fetch the draft again, show its current To/Cc/Bcc, subject and full body to the user, and obtain approval before sending the new version.
+- `send_failed`: the draft is saved, but `updatedAt` may advance even when nobody edited the content. Do not retry automatically. Read and show the current draft and obtain approval to retry with its current version.
+- `draft_sending`: do not retry now or change recipients. Wait and check the inbox for the sent message and the saved draft before considering another send. A missing draft may already have been sent.
 
 These commands require a bundled CLI with draft support (`openclaw openmail -- help drafts`). If unavailable, report that the plugin needs updating; do not turn a request to save a draft into a send.
 
