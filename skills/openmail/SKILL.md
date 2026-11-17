@@ -93,7 +93,7 @@ openclaw openmail -- drafts list --query Proposal --json
 openclaw openmail -- drafts get --draft-id "<id>" --json
 ```
 
-Drafts belong to the organisation and can be created before choosing a sender. Creation and listing do not use the configured default inbox. List is paginated across accessible drafts, with an optional `--inbox-id` filter; get needs only `--draft-id`. Scoped keys require drafts to be assigned to an inbox within their scope. Draft fields are optional. `--cc` and `--bcc` are repeatable; `--body-html` adds HTML. Attachments are not supported for drafts. Show the saved To/Cc/Bcc, subject and body to the user. Creating or reviewing a draft does not authorize sending.
+Drafts belong to the organisation and can be created before choosing a sender. Creation and listing do not use the configured default inbox. List is paginated across accessible drafts, with an optional `--inbox-id` filter; get needs only `--draft-id`. Scoped keys require drafts to be assigned to an inbox within their scope. Draft fields are optional. `--cc` and `--bcc` are repeatable; `--body-html` adds HTML. Creation through the CLI accepts text/HTML only; attachment uploads and reply-draft creation are console-only. Saved drafts can include `attachments` and `threadId`; review the files and reply context alongside the saved To/Cc/Bcc, subject and body. Creating or reviewing a draft does not authorize sending.
 
 When the user asks to send the reviewed draft:
 
@@ -101,7 +101,7 @@ When the user asks to send the reviewed draft:
 openclaw openmail -- drafts send --draft-id "<id>" --updated-at "<exact updatedAt from drafts get>" --inbox-id "<sending-inbox-id>" --json
 ```
 
-Choose the sending inbox explicitly, or omit `--inbox-id` only when a sender is already saved on the draft. Use the reviewed version, not a freshly fetched timestamp substituted without review. Sending uses stored recipients/content and removes the draft only on success; failed or pending sends retain it. Do not copy a saved draft into `send`.
+Choose the sending inbox explicitly, or omit `--inbox-id` only when a sender is already saved on the draft. Use the reviewed version, not a freshly fetched timestamp substituted without review. Sending uses stored recipients/content and removes the draft only on success; failed or pending sends retain it. The server preserves saved attachments and reply threading. A draft with `threadId` keeps its original inbox and subject; omit `--inbox-id` when sending that reply draft. Do not copy a saved draft into `send` or `reply`.
 
 - `draft_changed`: fetch the draft again, show its current To/Cc/Bcc, subject and full body to the user, and obtain approval before sending the new version.
 - `send_failed`: the draft is saved, but `updatedAt` may advance even when nobody edited the content. Do not retry automatically. Read and show the current draft and obtain approval to retry with its current version.
