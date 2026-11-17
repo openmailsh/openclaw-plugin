@@ -85,15 +85,16 @@ around it.
 
 ## Drafts
 
-Save email for review without sending:
+Save email for review without sending. Choose an inbox visible to this channel:
 
 ```bash
-openclaw openmail -- drafts create --to "person@example.com" --subject "Proposal" --body "Please review." --json
+openclaw openmail -- inbox list --json
+openclaw openmail -- drafts create --inbox-id "<inbox-id>" --to "person@example.com" --subject "Proposal" --body "Please review." --json
 openclaw openmail -- drafts list --query Proposal --json
 openclaw openmail -- drafts get --draft-id "<id>" --json
 ```
 
-Drafts belong to the organisation and can be created before choosing a sender. Creation and listing do not use the configured default inbox. List is paginated across accessible drafts, with an optional `--inbox-id` filter; get needs only `--draft-id`. Scoped keys require drafts to be assigned to an inbox within their scope. Draft fields are optional. `--cc` and `--bcc` are repeatable; `--body-html` adds HTML. Creation through the CLI accepts text/HTML only; attachment uploads and reply-draft creation are console-only. Saved drafts can include `attachments` and `threadId`; review the files and reply context alongside the saved To/Cc/Bcc, subject and body. Creating or reviewing a draft does not authorize sending.
+Drafts belong to the organisation. Creating a draft without a sender requires an account-wide connection; this channel uses an inbox- or pod-scoped key, so pass an explicit `--inbox-id` from `inbox list` when creating a draft. Creation does not use the configured default inbox. List is paginated across accessible drafts, with an optional `--inbox-id` filter; it does not select the configured default inbox. Get needs only `--draft-id`. Draft content fields are optional. `--cc` and `--bcc` are repeatable; `--body-html` adds HTML. Creation through the CLI accepts text/HTML only; attachment uploads and reply-draft creation are console-only. Saved drafts can include `attachments` and `threadId`; review the files and reply context alongside the saved To/Cc/Bcc, subject and body. Creating or reviewing a draft does not authorize sending.
 
 When the user asks to send the reviewed draft:
 

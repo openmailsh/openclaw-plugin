@@ -218,7 +218,7 @@ generated `compat` and `install.minHostVersion` follow that pin.
 
 ## Draft workflow
 
-The bundled skill supports saving, finding, reviewing and sending drafts through `openclaw openmail -- drafts create|list|get|send`. It uses the channel's existing credentials. Drafts belong to the organisation; create and list do not implicitly select its configured inbox. Scoped keys need an assigned inbox within their scope. Multiple accounts select `--account` before `--`.
+The bundled skill supports saving, finding, reviewing and sending drafts through `openclaw openmail -- drafts create|list|get|send`. It uses the channel's existing credentials. Drafts belong to the organisation; create and list do not implicitly select its configured inbox. Channel credentials are inbox- or pod-scoped, so creation must pass `--inbox-id` with an inbox returned by `inbox list`. Creating an unassigned draft requires an account-wide connection. Multiple accounts select `--account` before `--`.
 
 Sending requires `--draft-id` and the exact `--updated-at` from the reviewed draft. Select `--inbox-id` at send time or use the sender already saved on the draft. Incomplete drafts can be saved; failed sends retain the draft. No email is sent by create, list or get. Saved drafts may include attachments and reply-thread context from the console; review this metadata before sending. The server preserves both, and reply drafts retain their original sender and thread. CLI draft creation accepts text/HTML only.
 
