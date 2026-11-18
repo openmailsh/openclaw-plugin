@@ -218,8 +218,18 @@ generated `compat` and `install.minHostVersion` follow that pin.
 
 ## Draft workflow
 
-The bundled skill supports saving, finding, reviewing and sending drafts through `openclaw openmail -- drafts create|list|get|send`. It uses the channel's existing credentials. Drafts belong to the organisation; create and list do not implicitly select its configured inbox. Channel credentials are inbox- or pod-scoped, so creation must pass `--inbox-id` with an inbox returned by `inbox list`. Creating an unassigned draft requires an account-wide connection. Multiple accounts select `--account` before `--`.
+Use `openclaw openmail -- drafts create|list|get|send` with the channel's credentials.
+Select a sending inbox with `--inbox-id` at creation. You can save an incomplete
+draft, add HTML and files, or associate it with a thread. Use `--thread-id` for
+a reply and `--source-thread-id` for a forward that starts a new conversation.
 
-Sending requires `--draft-id` and the exact `--updated-at` from the reviewed draft. Select `--inbox-id` at send time or use the sender already saved on the draft. Incomplete drafts can be saved; failed sends retain the draft. No email is sent by create, list or get. Saved drafts may include attachments and reply-thread context from the console; review this metadata before sending. The server preserves both, and reply drafts retain their original sender and thread. CLI draft creation accepts text/HTML only.
+The console shows drafts in their owning inbox, in the main Drafts page, and
+in their source thread when present. The CLI lists drafts across the inboxes
+the channel can access and can combine inbox, pod, source thread, and text
+filters. To send, pass the draft ID and the exact `--updated-at` you reviewed.
+The saved inbox, content, and attachments carry through to delivery.
 
-Release dependency: deploy [OpenMail #659](https://github.com/openmailsh/openmail/pull/659) and release a draft-capable `@openmail/cli` from [CLI #40](https://github.com/openmailsh/cli/pull/40), then update this plugin's CLI dependency and lockfile before releasing these instructions. Check `openclaw openmail -- help drafts` after installation.
+See the [bundled skill](skills/openmail/SKILL.md#drafts) for command examples.
+[OpenMail #662](https://github.com/openmailsh/openmail/pull/662) adds the API.
+The plugin's CLI dependency and lockfile need the release containing
+[CLI #40](https://github.com/openmailsh/cli/pull/40) before publishing this workflow.

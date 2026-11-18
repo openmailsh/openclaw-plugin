@@ -85,30 +85,59 @@ around it.
 
 ## Drafts
 
-Save email for review without sending. Choose an inbox visible to this channel:
+Every draft belongs to the inbox that will send it. Choose an accessible inbox with
+`inbox list` and pass its ID explicitly when creating a draft. The sender is the
+only required field, so you can save a partial message for review.
 
 ```bash
 openclaw openmail -- inbox list --json
 openclaw openmail -- drafts create --inbox-id "<inbox-id>" --to "person@example.com" --subject "Proposal" --body "Please review." --json
-openclaw openmail -- drafts list --query Proposal --json
-openclaw openmail -- drafts get --draft-id "<id>" --json
+openclaw openmail -- drafts list --json
+openclaw openmail -- drafts list --inbox-id "<inbox-id>" --pod-id "<pod-id>" --query Proposal --json
+openclaw openmail -- drafts get --draft-id "<draft-id>" --json
 ```
 
-Drafts belong to the organisation. Creating a draft without a sender requires an account-wide connection; this channel uses an inbox- or pod-scoped key, so pass an explicit `--inbox-id` from `inbox list` when creating a draft. Creation does not use the configured default inbox. List is paginated across accessible drafts, with an optional `--inbox-id` filter; it does not select the configured default inbox. Get needs only `--draft-id`. Draft content fields are optional. `--cc` and `--bcc` are repeatable; `--body-html` adds HTML. Creation through the CLI accepts text/HTML only; attachment uploads and reply-draft creation are console-only. Saved drafts can include `attachments` and `threadId`; review the files and reply context alongside the saved To/Cc/Bcc, subject and body. Creating or reviewing a draft does not authorize sending.
+List returns drafts across the inboxes the channel can access. Combine
+`--inbox-id`, `--pod-id`, `--source-thread-id`, and `--query` to narrow the list.
+Use `--limit` and `--offset` for pagination. The console also shows each draft in
+its inbox and in the main Drafts page.
 
-When the user asks to send the reviewed draft:
+For a reply, use `--thread-id` and the inbox that owns the thread. The server
+sets the reply subject and records the thread as the source. For a forward,
+supply only `--source-thread-id` as the thread reference and compose the
+recipient, subject and content to forward. Both drafts appear in the source
+conversation. Sending the reply continues that conversation. Sending the
+forward starts a new one.
 
 ```bash
-openclaw openmail -- drafts send --draft-id "<id>" --updated-at "<exact updatedAt from drafts get>" --inbox-id "<sending-inbox-id>" --json
+openclaw openmail -- drafts create --inbox-id "<inbox-id>" --thread-id "<thread-id>" --to "person@example.com" --body "Thanks for the proposal." --json
+openclaw openmail -- drafts create --inbox-id "<inbox-id>" --source-thread-id "<thread-id>" --to "reviewer@example.com" --subject "Fwd: Proposal" --body-html "<p>Please review the attached proposal.</p>" --attach ./proposal.pdf --json
+openclaw openmail -- drafts list --source-thread-id "<thread-id>" --json
 ```
 
-Choose the sending inbox explicitly, or omit `--inbox-id` only when a sender is already saved on the draft. Use the reviewed version, not a freshly fetched timestamp substituted without review. Sending uses stored recipients/content and removes the draft only on success; failed or pending sends retain it. The server preserves saved attachments and reply threading. A draft with `threadId` keeps its original inbox and subject; omit `--inbox-id` when sending that reply draft. Do not copy a saved draft into `send` or `reply`.
+`--cc`, `--bcc`, and `--attach` are repeatable. Use `--body-html` for a rich-text
+body. OpenMail imports supported embedded or remote images in the HTML and
+stores them with the draft. For a local inline image, pass
+`--inline-image "inline-<UUID>@openmail=./photo.png"` and use the same content ID
+in an HTML image source, such as `src="cid:inline-<UUID>@openmail"`.
 
-- `draft_changed`: fetch the draft again, show its current To/Cc/Bcc, subject and full body to the user, and obtain approval before sending the new version.
-- `send_failed`: the draft is saved, but `updatedAt` may advance even when nobody edited the content. Do not retry automatically. Read and show the current draft and obtain approval to retry with its current version.
-- `draft_sending`: do not retry now or change recipients. Wait and check the inbox for the sent message and the saved draft before considering another send. A missing draft may already have been sent.
+Before sending, review the saved inbox, To/Cc/Bcc, subject, full body, files
+and thread context returned by `drafts get`. When the user asks to send that
+version, pass its exact `updatedAt`. The draft sends from its owning inbox with
+its saved content and attachments.
 
-These commands require a bundled CLI with draft support (`openclaw openmail -- help drafts`). If unavailable, report that the plugin needs updating; do not turn a request to save a draft into a send.
+```bash
+openclaw openmail -- drafts send --draft-id "<draft-id>" --updated-at "<reviewed updatedAt>" --json
+```
+
+A successful send removes the draft. Handle other outcomes as follows.
+
+- If you receive `draft_changed`, get the draft again and review the current version with the user before sending.
+- After `send_failed`, the draft is retained. A failed attempt can advance `updatedAt`. Review it again and obtain approval before retrying.
+- If you receive `draft_sending`, wait and check the owning inbox for the sent message and the saved draft before considering another send.
+
+These commands require a plugin release that bundles draft support. Check
+`openclaw openmail -- help drafts` if the commands are unavailable.
 
 ## Reading mail
 
