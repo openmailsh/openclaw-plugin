@@ -85,6 +85,16 @@ around it.
 
 ## Drafts
 
+To discard a draft when requested, read it with `openclaw openmail -- drafts get --draft-id "<draft-id>" --json`, then use:
+
+```bash
+openclaw openmail -- drafts delete --draft-id "<draft-id>" --updated-at "<reviewed updatedAt>" --json
+```
+
+Deletion permanently removes the unsent draft and its attachments. Optional `--inbox-id` checks ownership. On `draft_changed`, review the current draft and verify it is still the one to discard; never automatically fetch a new version and retry. Pending or accepted sends block deletion, which cannot cancel sending. Missing drafts may already have been sent or deleted; do not claim this request deleted them. No email is sent by deletion.
+
+The current CLI 0.9.0 bundle lacks `drafts delete`. This requires a plugin release bundling the new CLI after the API supports deletion. Check `openclaw openmail -- help drafts` and do not claim success when the command is unavailable.
+
 Every draft belongs to the inbox that will send it. Choose an accessible inbox with
 `inbox list` and pass its ID explicitly when creating a draft. The sender is the
 only required field, so you can save a partial message for review.
