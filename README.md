@@ -218,10 +218,14 @@ generated `compat` and `install.minHostVersion` follow that pin.
 
 ## Draft workflow
 
-Use `openclaw openmail -- drafts create|list|get|send` with the channel's credentials.
+Use `openclaw openmail -- drafts create|list|get|edit|send` with the channel's credentials.
 Select a sending inbox with `--inbox-id` at creation. You can save an incomplete
 draft, add HTML and files, or associate it with a thread. Use `--thread-id` for
 a reply and `--source-thread-id` for a forward that starts a new conversation.
+Both creation and editing accept only `--body-html`; the API generates plain text.
+To edit, read the draft and pass its exact `updatedAt` via `--updated-at` plus
+only the requested changes. Stale versions require reading and reconciling
+the current draft; edits never send mail.
 
 The console shows drafts in their owning inbox, in the main Drafts page, and
 in their source thread when present. The CLI lists drafts across the inboxes
@@ -230,5 +234,10 @@ filters. To send, pass the draft ID and the exact `--updated-at` you reviewed.
 The saved inbox, content, and attachments carry through to delivery.
 
 See the [bundled skill](skills/openmail/SKILL.md#drafts) for command examples.
-[OpenMail #662](https://github.com/openmailsh/openmail/pull/662) adds the API.
-OpenClaw plugin 0.1.7 bundles [OpenMail CLI 0.9.0](https://github.com/openmailsh/cli/releases/tag/v0.9.0) for these commands.
+[OpenMail #663](https://github.com/openmailsh/openmail/pull/663) adds HTML-only draft editing.
+The current plugin locks CLI 0.9.0, which has create/list/get/send but no edit.
+Before releasing these instructions, deploy API #663, publish the CLI from
+[CLI #41](https://github.com/openmailsh/cli/pull/41), then update this plugin's
+`@openmail/cli` dependency and lockfile to that published version and run `pnpm check`.
+The wrapper already passes draft arguments through with channel credentials;
+no separate OpenClaw draft API implementation is needed.
