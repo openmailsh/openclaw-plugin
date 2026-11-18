@@ -231,5 +231,4 @@ The saved inbox, content, and attachments carry through to delivery.
 
 See the [bundled skill](skills/openmail/SKILL.md#drafts) for command examples.
 [OpenMail #662](https://github.com/openmailsh/openmail/pull/662) adds the API.
-The plugin's CLI dependency and lockfile need the release containing
-[CLI #40](https://github.com/openmailsh/cli/pull/40) before publishing this workflow.
+OpenClaw plugin 0.1.7 bundles [OpenMail CLI 0.9.0](https://github.com/openmailsh/cli/releases/tag/v0.9.0) for these commands.
