@@ -174,21 +174,22 @@ this, not HTML), `attachments`, `createdAt`.
 
 ## Attachments
 
-Read a PDF, DOCX, XLSX, PPTX, or image (OCR) as text — do not download and
-parse it yourself:
+Get the message ID and the selected attachment's `id` from the notification,
+`threads get --json` or `messages list --json`. The bundled CLI calls the
+selector `--filename`. Pass the ID to select the right file when names repeat.
+For older messages missing the ID, a filename selects the first match.
+
+Extract text from a PDF, DOCX, XLSX, PPTX or image (OCR).
 
 ```bash
-openclaw openmail -- attachments text --message-id "<message-id>" --filename "<name>"
+openclaw openmail -- attachments text --message-id "<message-id>" --filename "<attachment-id>"
 ```
 
-Download the raw file only if you truly need the bytes:
+To save the raw bytes, choose a separate output path for each attachment.
 
 ```bash
-openclaw openmail -- attachments get --message-id "<message-id>" --filename "<name>" --out ./file
+openclaw openmail -- attachments get --message-id "<message-id>" --filename "<attachment-id>" --out ./report-copy.pdf
 ```
-
-Message ids and filenames come from `threads get` / `messages list`, and the
-inbound notification names the attachments for you.
 
 ## Rules
 

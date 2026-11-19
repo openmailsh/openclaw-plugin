@@ -8,6 +8,7 @@ import { buildAgentMainSessionKey } from "openclaw/plugin-sdk/routing";
 import { OPENMAIL_CHANNEL_ID, resolveInboxMode, type ResolvedOpenMailAccount } from "./accounts.js";
 import { stageInboundAttachments, type StagedMedia } from "./media.js";
 import {
+  attachmentLabel,
   OpenMailApi,
   type OpenMailAttachment,
   type OpenMailCategory,
@@ -98,6 +99,10 @@ export function wantsReply(c: Classification): boolean {
   return c.autoReplyable !== false;
 }
 
+function quoteShellArgument(value: string): string {
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
 export function buildAgentText(params: {
   from: string;
   to?: string | null;
@@ -108,6 +113,7 @@ export function buildAgentText(params: {
   attachments: OpenMailAttachment[];
   staged: StagedMedia;
   mode?: "channel" | "notify";
+  accountId?: string;
   /** Shown in pod scope so the agent knows which inbox to answer from via the CLI. */
   inboxId?: string;
   /** Server classification; surfaced so the agent knows a robot sent it. */
@@ -124,27 +130,32 @@ export function buildAgentText(params: {
 
   const sections: string[] = [];
   if (params.attachments.length > 0) {
-    header.push(`Attachments: ${params.attachments.map((a) => a.filename).join(", ")}`);
+    header.push(`Message: ${params.messageId}`);
+    header.push(`Attachments: ${params.attachments.map(attachmentLabel).join(", ")}`);
     if (params.staged.paths.length > 0) {
       header.push(`(${params.staged.paths.length} attached as files you can open)`);
     }
     if (params.staged.skipped.length > 0) {
       header.push(`(skipped, over the media size limit: ${params.staged.skipped.join(", ")})`);
     }
+    // CLI 0.9.1 calls the route selector --filename, even when it contains an ID.
+    const accountFlag = params.accountId ? ` --account ${quoteShellArgument(params.accountId)}` : "";
+    const readText = `openclaw openmail${accountFlag} -- attachments text --message-id ${quoteShellArgument(params.messageId)} --filename`;
     let budget = PARSED_TEXT_TOTAL;
     for (const att of params.attachments) {
+      const label = attachmentLabel(att);
       const text = att.parsedText?.trim();
-      if (!text || budget <= 0) continue;
+      if (!text) {
+        if (!params.staged.paths.length || params.staged.skipped.includes(label)) {
+          header.push(`(read with: ${readText} ${quoteShellArgument(att.id || att.filename)})`);
+        }
+        continue;
+      }
+      if (budget <= 0) continue;
       const slice = text.slice(0, Math.min(PARSED_TEXT_PER_FILE, budget));
       budget -= slice.length;
       sections.push(
-        `--- ${att.filename} (extracted text${slice.length < text.length ? ", truncated" : ""}) ---\n${slice}`,
-      );
-    }
-    const unread = params.attachments.filter((a) => !a.parsedText?.trim()).map((a) => a.filename);
-    if (unread.length > 0 && params.staged.paths.length === 0) {
-      header.push(
-        `(read one with: openclaw openmail -- attachments text --message-id ${params.messageId} --filename "${unread[0]}")`,
+        `--- ${label} (extracted text${slice.length < text.length ? ", truncated" : ""}) ---\n${slice}`,
       );
     }
   }
@@ -281,6 +292,7 @@ export async function dispatchOpenMailMessage(params: {
       attachments,
       staged,
       mode,
+      accountId: ctx.accountId,
       inboxId: account.scope === "pod" ? inboxId : undefined,
       category: classification.category,
     });
