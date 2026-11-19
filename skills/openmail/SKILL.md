@@ -93,7 +93,7 @@ openclaw openmail -- drafts delete --draft-id "<draft-id>" --updated-at "<review
 
 Deletion permanently removes the unsent draft and its attachments. Optional `--inbox-id` checks ownership. On `draft_changed`, review the current draft and verify it is still the one to discard; never automatically fetch a new version and retry. Pending or accepted sends block deletion, which cannot cancel sending. Missing drafts may already have been sent or deleted; do not claim this request deleted them. No email is sent by deletion.
 
-The current CLI 0.9.0 bundle lacks `drafts edit` and `drafts delete`. These require a plugin release bundling the combined CLI changes after the public draft API is deployed. Check `openclaw openmail -- help drafts` and do not claim success when a command is unavailable.
+The bundled CLI 0.9.1 supports `drafts edit` and `drafts delete`. On an older plugin, check `openclaw openmail -- help drafts` and update the plugin if those commands are unavailable; do not claim an edit or deletion succeeded when the command did not run.
 
 Every draft belongs to the inbox that will send it. Choose an accessible inbox with
 `inbox list` and pass its ID explicitly when creating a draft. The sender is the

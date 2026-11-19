@@ -218,9 +218,9 @@ generated `compat` and `install.minHostVersion` follow that pin.
 
 ## Draft workflow
 
-Draft editing and deletion require a plugin release bundling a CLI with `drafts edit` and `drafts delete`, after the public draft API is deployed. The current CLI 0.9.0 bundle has neither command. Before releasing these instructions, publish the combined CLI changes, update `@openmail/cli` and the lockfile to that published version, and run `pnpm check`.
+OpenClaw plugin 0.1.8 bundles [OpenMail CLI 0.9.1](https://github.com/openmailsh/cli/releases/tag/v0.9.1), including HTML-only draft creation and editing plus version-checked deletion.
 
-Once available, read a draft with `openclaw openmail -- drafts get --draft-id "<id>" --json`, then discard it using `openclaw openmail -- drafts delete --draft-id "<id>" --updated-at "<saved updatedAt>" --json`. The wrapper forwards the version unchanged with the channel credentials. Deletion permanently removes the draft and files without sending. Stale versions and pending or accepted sends block it; it cannot cancel delivery. Never automatically replace the version and retry deletion.
+Read a draft with `openclaw openmail -- drafts get --draft-id "<id>" --json`, then discard it using `openclaw openmail -- drafts delete --draft-id "<id>" --updated-at "<saved updatedAt>" --json`. The wrapper forwards the version unchanged with the channel credentials. Deletion permanently removes the draft and files without sending. Stale versions and pending or accepted sends block it; it cannot cancel delivery. Never automatically replace the version and retry deletion.
 
 Use `openclaw openmail -- drafts create|list|get|edit|send|delete` with the channel's credentials.
 Select a sending inbox with `--inbox-id` at creation. You can save an incomplete

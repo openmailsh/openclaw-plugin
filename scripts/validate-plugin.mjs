@@ -83,6 +83,17 @@ const version = step("bundled CLI runs through passthrough", () =>
 );
 if (!/\d+\.\d+\.\d+/.test(version)) fail("bundled CLI did not print a version", version);
 
+// Exercise the installed CLI through the real host, not only mocked spawn calls.
+// An older bundled CLI can forward arguments successfully yet lack these commands.
+const draftHelp = step("bundled CLI exposes draft editing and deletion", () =>
+  run(["openmail", "--account", "validate", "--", "help", "drafts"]),
+);
+for (const action of ["edit", "delete"]) {
+  if (!new RegExp(`^\\s+${action} --draft-id`, "m").test(draftHelp)) {
+    fail(`bundled CLI does not support drafts ${action}`, draftHelp);
+  }
+}
+
 const skills = step("list eligible skills", () => run(["skills", "list", "--eligible"]));
 if (!/\bopenmail\b/.test(skills)) fail("openmail skill is not eligible", skills);
 
