@@ -76,8 +76,8 @@ describe("buildAgentText", () => {
     expect(text).toContain("Message: m1");
     expect(text).toContain("Attachments: report.pdf [id=first], report.pdf [id=second], report.pdf [id=third]");
     expect(text).toContain("--- report.pdf [id=first] (extracted text) ---\nfirst report");
-    expect(text).toContain("openclaw openmail --account 'sales' -- attachments text --message-id 'm1' --filename 'third'");
-    expect(text).not.toContain("--filename 'report.pdf'");
+    expect(text).toContain("openclaw openmail --account 'sales' -- attachments text --message-id 'm1' --attachment-id 'third'");
+    expect(text).not.toContain("--filename");
   });
 
   it("truncates long extracted text", () => {

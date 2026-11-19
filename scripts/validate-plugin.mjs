@@ -94,6 +94,15 @@ for (const action of ["edit", "delete"]) {
   }
 }
 
+const attachmentHelp = step("bundled CLI exposes attachment IDs", () =>
+  run(["openmail", "--account", "validate", "--", "help", "attachments"]),
+);
+for (const action of ["text", "get"]) {
+  if (!new RegExp(`^\\s+${action}\\b.*--attachment-id\\b`, "m").test(attachmentHelp)) {
+    fail(`bundled CLI does not expose --attachment-id for attachments ${action}`, attachmentHelp);
+  }
+}
+
 const skills = step("list eligible skills", () => run(["skills", "list", "--eligible"]));
 if (!/\bopenmail\b/.test(skills)) fail("openmail skill is not eligible", skills);
 

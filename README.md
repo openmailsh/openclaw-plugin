@@ -133,7 +133,7 @@ it with the channel's credentials:
 
 ```bash
 openclaw openmail -- threads get --thread-id <id> --json
-openclaw openmail -- attachments text --message-id "<message-id>" --filename "<attachment-id>"
+openclaw openmail -- attachments text --message-id "<message-id>" --attachment-id "<attachment-id>"
 openclaw openmail --account sales -- send --to a@b.com --thread-id <id> --body "..."
 ```
 
@@ -149,7 +149,7 @@ Credentials come from the channel config only. `--api-key`, `--base-url` and
    OpenClaw's media store and passed as `MediaPaths`, so a vision model sees
    the picture. `mediaMaxMb` caps the total per email (default 20, `0`
    disables); oversized files are skipped and named.
-3. **The CLI.** The notification and `threads get --json` show each attachment's ID beside its original filename. The bundled CLI accepts the ID through `--filename` for `attachments text` and `attachments get`. For raw downloads, use `--out` to give each copy its own local path. A legacy filename selects the first matching file.
+3. **The CLI.** Find the message ID and the selected attachment's ID in the notification, `threads get --json`, or `messages list --json`. Pass them as `--message-id` and `--attachment-id` to `attachments text` or `attachments get`. For raw downloads, use `--out` to give each copy its own local path.
 
 ## Behaviour
 
@@ -218,7 +218,7 @@ generated `compat` and `install.minHostVersion` follow that pin.
 
 ## Draft workflow
 
-The plugin bundles OpenMail CLI 0.9.1, including HTML-only draft creation and editing plus version-checked deletion. [CLI release notes](https://github.com/openmailsh/cli/releases/tag/v0.9.1)
+The bundled OpenMail CLI supports HTML-only draft creation and editing plus version-checked deletion. [CLI 0.9.1 release notes](https://github.com/openmailsh/cli/releases/tag/v0.9.1)
 
 Read a draft with `openclaw openmail -- drafts get --draft-id "<id>" --json`, then discard it using `openclaw openmail -- drafts delete --draft-id "<id>" --updated-at "<saved updatedAt>" --json`. The wrapper forwards the version unchanged with the channel credentials. Deletion permanently removes the draft and files without sending. Stale versions and pending or accepted sends block it; it cannot cancel delivery. Never automatically replace the version and retry deletion.
 

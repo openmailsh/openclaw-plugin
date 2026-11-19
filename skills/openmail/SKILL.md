@@ -93,7 +93,7 @@ openclaw openmail -- drafts delete --draft-id "<draft-id>" --updated-at "<review
 
 Deletion permanently removes the unsent draft and its attachments. Optional `--inbox-id` checks ownership. On `draft_changed`, review the current draft and verify it is still the one to discard; never automatically fetch a new version and retry. Pending or accepted sends block deletion, which cannot cancel sending. Missing drafts may already have been sent or deleted; do not claim this request deleted them. No email is sent by deletion.
 
-The bundled CLI 0.9.1 supports `drafts edit` and `drafts delete`. On an older plugin, check `openclaw openmail -- help drafts` and update the plugin if those commands are unavailable; do not claim an edit or deletion succeeded when the command did not run.
+The bundled CLI supports `drafts edit` and `drafts delete`. On an older plugin, check `openclaw openmail -- help drafts` and update the plugin if those commands are unavailable; do not claim an edit or deletion succeeded when the command did not run.
 
 Every draft belongs to the inbox that will send it. Choose an accessible inbox with
 `inbox list` and pass its ID explicitly when creating a draft. The sender is the
@@ -174,21 +174,20 @@ this, not HTML), `attachments`, `createdAt`.
 
 ## Attachments
 
-Get the message ID and the selected attachment's `id` from the notification,
-`threads get --json` or `messages list --json`. The bundled CLI calls the
-selector `--filename`. Pass the ID to select the right file when names repeat.
-For older messages missing the ID, a filename selects the first match.
+Read the message's `id` and the selected entry's `id` in `attachments` from
+`threads get --json` or `messages list --json`. The notification also shows
+both IDs. Pass them as `--message-id` and `--attachment-id`.
 
 Extract text from a PDF, DOCX, XLSX, PPTX or image (OCR).
 
 ```bash
-openclaw openmail -- attachments text --message-id "<message-id>" --filename "<attachment-id>"
+openclaw openmail -- attachments text --message-id "<message-id>" --attachment-id "<attachment-id>"
 ```
 
 To save the raw bytes, choose a separate output path for each attachment.
 
 ```bash
-openclaw openmail -- attachments get --message-id "<message-id>" --filename "<attachment-id>" --out ./report-copy.pdf
+openclaw openmail -- attachments get --message-id "<message-id>" --attachment-id "<attachment-id>" --out ./report-copy.pdf
 ```
 
 ## Rules

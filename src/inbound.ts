@@ -138,16 +138,18 @@ export function buildAgentText(params: {
     if (params.staged.skipped.length > 0) {
       header.push(`(skipped, over the media size limit: ${params.staged.skipped.join(", ")})`);
     }
-    // CLI 0.9.1 calls the route selector --filename, even when it contains an ID.
     const accountFlag = params.accountId ? ` --account ${quoteShellArgument(params.accountId)}` : "";
-    const readText = `openclaw openmail${accountFlag} -- attachments text --message-id ${quoteShellArgument(params.messageId)} --filename`;
+    const readText = `openclaw openmail${accountFlag} -- attachments text --message-id ${quoteShellArgument(params.messageId)}`;
     let budget = PARSED_TEXT_TOTAL;
     for (const att of params.attachments) {
       const label = attachmentLabel(att);
       const text = att.parsedText?.trim();
       if (!text) {
         if (!params.staged.paths.length || params.staged.skipped.includes(label)) {
-          header.push(`(read with: ${readText} ${quoteShellArgument(att.id || att.filename)})`);
+          const selector = att.id
+            ? `--attachment-id ${quoteShellArgument(att.id)}`
+            : `--filename ${quoteShellArgument(att.filename)}`;
+          header.push(`(read with: ${readText} ${selector})`);
         }
         continue;
       }
