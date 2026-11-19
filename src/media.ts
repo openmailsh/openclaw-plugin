@@ -5,7 +5,7 @@ import { rm } from "node:fs/promises";
 import { saveMediaBuffer } from "openclaw/plugin-sdk/media-store";
 
 import type { OpenMailApi, OpenMailAttachment } from "./openmail-api.js";
-import { AttachmentTooLargeError } from "./openmail-api.js";
+import { attachmentLabel, AttachmentTooLargeError } from "./openmail-api.js";
 
 export type StagedMedia = { paths: string[]; types: string[]; skipped: string[] };
 
@@ -37,7 +37,7 @@ export async function stageInboundAttachments(params: {
     const declared = typeof att.sizeBytes === "number" ? att.sizeBytes : 0;
     const remaining = params.maxBytes - used;
     if (declared > remaining) {
-      out.skipped.push(att.filename);
+      out.skipped.push(attachmentLabel(att));
       continue;
     }
     try {
@@ -45,6 +45,7 @@ export async function stageInboundAttachments(params: {
         params.messageId,
         att.filename,
         remaining,
+        att.id,
       );
       used += buffer.byteLength;
       downloaded.push({
@@ -54,7 +55,7 @@ export async function stageInboundAttachments(params: {
       });
     } catch (err) {
       if (err instanceof AttachmentTooLargeError) {
-        out.skipped.push(att.filename);
+        out.skipped.push(attachmentLabel(att));
         continue;
       }
       throw err;

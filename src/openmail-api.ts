@@ -28,6 +28,7 @@ export type OpenMailPod = {
 };
 
 export type OpenMailAttachment = {
+  id?: string | null;
   filename: string;
   contentType?: string | null;
   sizeBytes?: number | null;
@@ -35,6 +36,10 @@ export type OpenMailAttachment = {
   /** Server-side text extraction (PDF, docx, csv...). Absent for binary media. */
   parsedText?: string | null;
 };
+
+export function attachmentLabel(att: OpenMailAttachment): string {
+  return att.id ? `${att.filename} [id=${att.id}]` : att.filename;
+}
 
 export type OpenMailMessage = {
   id: string;
@@ -218,9 +223,11 @@ export class OpenMailApi {
     messageId: string,
     filename: string,
     maxBytes: number,
+    attachmentId?: string | null,
   ): Promise<{ buffer: Buffer; contentType: string | undefined }> {
+    const selector = attachmentId || filename;
     const response = await fetch(
-      `${this.baseUrl}/v1/attachments/${encodeURIComponent(messageId)}/${encodeURIComponent(filename)}`,
+      `${this.baseUrl}/v1/attachments/${encodeURIComponent(messageId)}/${encodeURIComponent(selector)}`,
       { headers: { ...CLIENT_HEADERS, Authorization: `Bearer ${this.apiKey}` } },
     );
     if (!response.ok) {

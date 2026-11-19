@@ -52,14 +52,32 @@ describe("buildAgentText", () => {
     expect(text).not.toContain("attachments text --message-id");
   });
 
-  it("points at the CLI only when nothing was extracted or staged", () => {
+  it("can still read a legacy attachment by filename", () => {
     const text = buildAgentText({
       ...base,
-      attachments: [{ filename: "photo.jpg" }],
-      staged: { paths: [], types: [], skipped: ["photo.jpg"] },
+      attachments: [{ filename: "Ada's photo.jpg" }],
+      staged: { paths: [], types: [], skipped: ["Ada's photo.jpg"] },
     });
-    expect(text).toContain('attachments text --message-id m1 --filename "photo.jpg"');
-    expect(text).toContain("skipped, over the media size limit: photo.jpg");
+    expect(text).toContain("attachments text --message-id 'm1' --filename 'Ada'\\''s photo.jpg'");
+    expect(text).toContain("skipped, over the media size limit: Ada's photo.jpg");
+  });
+
+  it("identifies duplicate names in extracted text and in commands for unstaged files", () => {
+    const text = buildAgentText({
+      ...base,
+      accountId: "sales",
+      attachments: [
+        { id: "first", filename: "report.pdf", parsedText: "first report" },
+        { id: "second", filename: "report.pdf" },
+        { id: "third", filename: "report.pdf" },
+      ],
+      staged: { paths: ["/cache/second.pdf"], types: ["application/pdf"], skipped: ["report.pdf [id=third]"] },
+    });
+    expect(text).toContain("Message: m1");
+    expect(text).toContain("Attachments: report.pdf [id=first], report.pdf [id=second], report.pdf [id=third]");
+    expect(text).toContain("--- report.pdf [id=first] (extracted text) ---\nfirst report");
+    expect(text).toContain("openclaw openmail --account 'sales' -- attachments text --message-id 'm1' --attachment-id 'third'");
+    expect(text).not.toContain("--filename");
   });
 
   it("truncates long extracted text", () => {
