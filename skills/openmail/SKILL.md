@@ -1,6 +1,6 @@
 ---
 name: openmail
-description: The agent has its own email address via OpenMail. Use this skill to create, find, review, edit, send or delete saved drafts, send email, reply in a thread, read a thread, check for unread mail, or read an attachment. Also use it when the user says things like "reach out to them", "contact support", "sign up", "wait for their reply", "check if they responded", or "what did that PDF say" — even without the word "email".
+description: The agent has its own email address via OpenMail. Use this skill to create, find, review, edit, send or delete saved drafts, browse inbox folders, send email, reply in a thread, read a thread, check for unread mail, or read an attachment. Also use it when the user says things like "reach out to them", "contact support", "sign up", "wait for their reply", "check if they responded", or "what did that PDF say" — even without the word "email".
 metadata: {"openclaw":{"emoji":"📬","requires":{"bins":["openclaw"]}}}
 ---
 
@@ -171,6 +171,17 @@ openclaw openmail -- messages list --direction inbound --limit 20 --json
 
 Messages carry `id`, `threadId`, `fromAddr`, `subject`, `bodyText` (use
 this, not HTML), `attachments`, `createdAt`.
+
+### Browse a folder
+
+List the folders in the requested inbox. Choose the matching name or path and pass its numeric ID (shown here as `42`) in the same inbox.
+
+```bash
+openclaw openmail -- folders list --inbox-id inb_xxx --json
+openclaw openmail -- folders messages --inbox-id inb_xxx --folder-id 42 --limit 20 --offset 0 --json
+```
+
+The newest items appear first. In Drafts, use `kind` to tell saved drafts from messages. If `total` exceeds the number fetched, continue with the next offset.
 
 ## Attachments
 

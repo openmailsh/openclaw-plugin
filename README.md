@@ -141,6 +141,8 @@ openclaw openmail -- send --to alex@example.com --to sam@example.com --subject "
 Credentials come from the channel config only. `--api-key`, `--base-url` and
 `--state-path` are rejected; proxy env vars are stripped.
 
+To browse Archive or a custom folder, list the folders in the inbox and use the returned numeric ID. [Folder commands](skills/openmail/SKILL.md#browse-a-folder)
+
 ## Attachments
 
 1. **Extracted text, inline.** OpenMail parses PDF, DOCX, XLSX, PPTX, CSV and
