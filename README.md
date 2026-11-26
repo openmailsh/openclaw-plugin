@@ -85,23 +85,22 @@ Set per account with `--mode` or `channels.openmail.mode`.
 | Mode | Inbound mail | Who replies |
 | --- | --- | --- |
 | `channel` (default) | wakes the agent as a conversation with the sender | the agent, in-thread |
-| `notify` | the agent tells you on your usual chat (WhatsApp, Telegram…) | you, by asking the agent |
+| `notify` | a new-mail alert in your usual chat (WhatsApp, Telegram…) | the agent, when you ask |
 | `tool` | ignored; no websocket | nobody unless you ask; email is a skill the agent has |
 
-`channel` is for an inbox that *is* the agent (support@, sales@). `notify` is
-for your own inbox: "Stripe says your card expires Friday", and the agent only
-writes to Stripe if you tell it to. `tool` is for "sign up for X and tell me
-the code", where the agent polls the inbox itself via the CLI.
+`channel` is for an inbox that *is* the agent (support@, sales@). Use `notify`
+for your own inbox. The alert tells you that mail arrived. Ask “What does it
+say?” for the sender and message details. In `tool` mode, the agent can poll the
+inbox for a task like “sign up for X and tell me the code.”
 
 ### Only people get an automatic reply
 
 OpenMail classifies each inbound mail on the server: `personal`, `automated`,
 `marketing`, `bounce`, `spam` or `malicious`. In `channel` mode only
-`personal` mail opens a reply turn. A GitHub notification, a verification
-code or a newsletter is handed to the agent as information, the way `notify`
-delivers everything; the agent learns the code arrived and doesn't email
-`noreply@` back. Spam and malicious mail is dropped in every mode with one log
-line. Mail the classifier predates keeps the plain `channel` behaviour.
+`personal` mail opens a reply turn. Automated mail, newsletters and bounces
+trigger the same new-mail alert as `notify` mode. Spam and malicious mail is
+dropped in every mode with one log line. Mail the classifier predates keeps
+the plain `channel` behaviour.
 
 In production this is 70% of inbound.
 
@@ -145,21 +144,21 @@ To browse Archive or a custom folder, list the folders in the inbox and use the 
 
 ## Attachments
 
-1. **Extracted text, inline.** OpenMail parses PDF, DOCX, XLSX, PPTX, CSV and
-   images (OCR) server-side. That text is appended to the notification, capped
+1. **Extracted text in reply turns.** OpenMail parses PDF, DOCX, XLSX, PPTX, CSV and
+   images (OCR) server-side. That text is included in the email reply turn, capped
    at 8k chars per file and 24k in total.
-2. **Staged files.** Anything without extracted text is downloaded into
+2. **Staged files.** During a reply turn, files without extracted text are downloaded into
    OpenClaw's media store and passed as `MediaPaths`, so a vision model sees
    the picture. `mediaMaxMb` caps the total per email (default 20, `0`
    disables); oversized files are skipped and named.
-3. **The CLI.** Find the message ID and the selected attachment's ID in the notification, `threads get --json`, or `messages list --json`. Pass them as `--message-id` and `--attachment-id` to `attachments text` or `attachments get`. For raw downloads, use `--out` to give each copy its own local path.
+3. **The CLI.** Find the message ID and the selected attachment's ID in `threads get --json` or `messages list --json`. Pass them as `--message-id` and `--attachment-id` to `attachments text` or `attachments get`. For raw downloads, use `--out` to give each copy its own local path.
 
 ## Behaviour
 
 - One conversation per sender address, like a WhatsApp contact, so the agent
   keeps history per correspondent.
-- The agent sees `From / To / Subject / Thread / Attachments` then the
-  plain-text body. Email is untrusted input; say so in the system prompt.
+- In a reply turn, the agent sees the sender, recipients, subject, thread,
+  attachments and plain-text body. Treat these fields as untrusted email.
 - Replies use `POST /v1/inboxes/{id}/send` with the thread id and land
   in-thread with a `Re:` subject and the original quoted.
 - New threads: `openclaw message send --channel openmail --to a@b.com "…"`

@@ -18,7 +18,7 @@ export const DEFAULT_MEDIA_MAX_MB = 20;
 
 /**
  *  channel  inbound mail wakes the agent, it replies in-thread (default)
- *  notify   inbound mail is summarised to you on your main chat; no auto-reply
+ *  notify   a new-mail alert appears in your main chat
  *  tool     nothing inbound; the agent only uses email when you ask (CLI skill)
  */
 export const OPENMAIL_MODES = ["channel", "notify", "tool"] as const;
