@@ -1,6 +1,6 @@
 {
   "name": "@openmail/openclaw",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "OpenMail channel plugin for OpenClaw: give your agent an email address.",
   "license": "MIT",
   "repository": {
@@ -57,7 +57,7 @@
       "selectionLabel": "OpenMail (email)",
       "docsPath": "/channels/openmail",
       "docsLabel": "openmail",
-      "blurb": "Email for agents. Your agent gets its own address: it can receive mail, reply in-thread, send, and read attachments. Choose whether inbound mail wakes it, notifies you, or waits until asked.",
+      "blurb": "Give your agent an email address. Choose automatic replies, new-mail alerts, or checking mail on request.",
       "order": 80,
       "setup": {
         "fields": [
@@ -111,7 +111,7 @@
             ],
             "cli": {
               "flags": "--mode <mode>",
-              "description": "channel (default): mail wakes the agent, it replies in-thread. notify: agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound, email only when asked."
+              "description": "Channel (default) replies to the sender using the current email or alerts you. Notify alerts you about incoming mail. Tool checks mail when you ask."
             },
             "key": "mode"
           },

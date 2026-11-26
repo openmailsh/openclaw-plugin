@@ -93,9 +93,9 @@ export async function startOpenMailGatewayAccount(
   };
   const { ingress, cursor } = createIngress({
     ctx,
-    dispatch: (event, lifecycle) => {
+    dispatch: (event) => {
       ctx.setStatus({ ...ctx.getStatus(), accountId: ctx.accountId, lastInboundAt: Date.now() });
-      return dispatchOpenMailMessage({ ctx, event, api, lifecycle, inboxAddress });
+      return dispatchOpenMailMessage({ ctx, event, api, inboxAddress });
     },
   });
   ctx.log?.info?.(`openmail: ingress mode ${ingress.mode}`);

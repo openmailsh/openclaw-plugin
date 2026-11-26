@@ -2,11 +2,7 @@
 
 An email address for your [OpenClaw](https://openclaw.ai) agent.
 
-Mail to `sales@omail.sh` reaches the agent as a conversation with the sender,
-and whatever it writes back goes out in the same thread. Notifications and
-newsletters are announced rather than answered. The agent can also read
-attachments, start new threads, and create more inboxes, all through the
-gateway you already run.
+In channel mode, personal mail can receive an automatic reply in the same thread. The reply uses only the incoming email and goes only to its sender. When mail needs your attention, you get an alert in your usual chat.
 
 ## Install
 
@@ -64,8 +60,7 @@ openclaw openmail --account outreach -- send --inbox-id <id> --thread-id <thr> -
 ```
 
 A new inbox streams mail within a minute; the gateway re-subscribes on a
-timer. Each `(inbox, sender)` pair is its own conversation and replies leave
-from the inbox that received the mail. Inboxes inherit the account's `mode`
+timer. Replies leave from the inbox that received the mail. Inboxes inherit the account's `mode`
 unless overridden by address or id:
 
 ```json5
@@ -84,7 +79,7 @@ Set per account with `--mode` or `channels.openmail.mode`.
 
 | Mode | Inbound mail | Who replies |
 | --- | --- | --- |
-| `channel` (default) | wakes the agent as a conversation with the sender | the agent, in-thread |
+| `channel` (default) | answers personal mail using only the current email, or alerts you | an isolated responder, to the sender |
 | `notify` | a new-mail alert in your usual chat (WhatsApp, Telegram…) | the agent, when you ask |
 | `tool` | ignored; no websocket | nobody unless you ask; email is a skill the agent has |
 
@@ -102,13 +97,9 @@ trigger the same new-mail alert as `notify` mode. Spam and malicious mail is
 dropped in every mode with one log line. Mail the classifier predates keeps
 the plain `channel` behaviour.
 
-In production this is 70% of inbound.
-
 ## Security defaults
 
-Email is the widest prompt-injection surface an agent has, and the inbox has
-to stay open because an agent that signs up for things must receive mail from
-strangers. So the defences are on what the agent can do, not on who can write.
+Automatic replies have no access to your chat history, other mail, files or tools. If a reply needs that access, an attachment cannot be read as text, or isolated replies are unavailable, your usual chat gets a new-mail alert. Open the thread there when you want to follow up.
 
 - **Sender rules live in OpenMail.** Who may email an inbox is decided by
   OpenMail's allow/block policy
@@ -144,23 +135,13 @@ To browse Archive or a custom folder, list the folders in the inbox and use the 
 
 ## Attachments
 
-1. **Extracted text in reply turns.** OpenMail parses PDF, DOCX, XLSX, PPTX, CSV and
-   images (OCR) server-side. That text is included in the email reply turn, capped
-   at 8k chars per file and 24k in total.
-2. **Staged files.** During a reply turn, files without extracted text are downloaded into
-   OpenClaw's media store and passed as `MediaPaths`, so a vision model sees
-   the picture. `mediaMaxMb` caps the total per email (default 20, `0`
-   disables); oversized files are skipped and named.
-3. **The CLI.** Find the message ID and the selected attachment's ID in `threads get --json` or `messages list --json`. Pass them as `--message-id` and `--attachment-id` to `attachments text` or `attachments get`. For raw downloads, use `--out` to give each copy its own local path.
+Automatic replies can use extracted attachment text up to 8,000 characters per file and 24,000 in total. If an attachment exceeds either limit or has no extracted text, you get a new-mail alert.
+
+To read an attachment yourself, find its message and attachment IDs in `threads get --json` or `messages list --json`. Pass both IDs to `attachments text` or `attachments get`. Use `--out` for a raw download.
 
 ## Behaviour
 
-- One conversation per sender address, like a WhatsApp contact, so the agent
-  keeps history per correspondent.
-- In a reply turn, the agent sees the sender, recipients, subject, thread,
-  attachments and plain-text body. Treat these fields as untrusted email.
-- Replies use `POST /v1/inboxes/{id}/send` with the thread id and land
-  in-thread with a `Re:` subject and the original quoted.
+- Automatic replies go to the sender in the original thread, without copying other participants or quoting earlier messages.
 - New threads: `openclaw message send --channel openmail --to a@b.com "…"`
   (first line becomes the subject) or the CLI `send`. Outbound allow/block
   rules, if you want them, live in OpenMail (`openmail policy … --direction outbound`).
@@ -175,7 +156,6 @@ To browse Archive or a custom folder, list the folders in the inbox and use the 
       "apiKey": "om_…",          // inbox-scoped, or a SecretRef (below)
       "inboxId": "…",            // or "podId" for a whole pod
       "mode": "channel",         // "notify" | "tool"; pod accounts may override per inbox (above)
-      "mediaMaxMb": 20,
       "accounts": {
         "sales": {
           "apiKey": { "source": "env", "provider": "default", "id": "OPENMAIL_SALES_KEY" },

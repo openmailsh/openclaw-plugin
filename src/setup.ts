@@ -38,7 +38,7 @@ function describeMode(mode: OpenMailMode, where: string): string {
     return `In notify mode, new mail at ${where} triggers an alert in your main chat. Ask to read the email or reply.`;
   }
   if (mode === "tool") return `Mode: tool. Nothing inbound wakes the agent; it uses ${where} only when you ask.`;
-  return `Mode: channel. Mail to ${where} wakes the agent and it replies in the same thread.`;
+  return `Mode: channel. Mail to ${where} can receive an isolated reply to the sender. Mail that needs your help triggers an alert.`;
 }
 
 function describeSenders(where: string): string {
@@ -52,7 +52,7 @@ export const OPENMAIL_META = {
   docsPath: "/channels/openmail",
   docsLabel: "openmail",
   blurb:
-    "Email for agents. Your agent gets its own address: it can receive mail, reply in-thread, send, and read attachments. Choose whether inbound mail wakes it, notifies you, or waits until asked.",
+    "Give your agent an email address. Choose automatic replies, new-mail alerts, or checking mail on request.",
   order: 80,
 } as const;
 
@@ -310,7 +310,7 @@ export const openmailSetupContract = defineChannelSetupContract({
       cli: {
         flags: "--mode <mode>",
         description:
-          "channel (default): mail wakes the agent, it replies in-thread. notify: agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound, email only when asked.",
+          "Channel (default) replies to the sender using the current email or alerts you. Notify alerts you about incoming mail. Tool checks mail when you ask.",
       },
     },
     baseUrl: {
@@ -384,7 +384,7 @@ export const openmailSetupPlugin: ChannelPlugin<ResolvedOpenMailAccount> = {
     completionNote: {
       title: "OpenMail next steps",
       lines: [
-        "Restart the Gateway. channel mode: email the inbox, the agent replies in-thread. notify mode: the agent tells you about new mail on your usual chat. Change with --mode.",
+        "Restart the Gateway. channel mode: email the inbox for a sender-only reply or an alert. notify mode: the agent tells you about new mail on your usual chat. Change with --mode.",
         `Docs: ${formatDocsLink("/channels/openmail", "channels/openmail")}`,
       ],
     },

@@ -12,7 +12,6 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ChannelGatewayContext } from "openclaw/plugin-sdk/channel-contract";
 import { createStandardRawEventIngressMonitor } from "openclaw/plugin-sdk/channel-ingress-runtime";
-import type { ChannelIngressMonitorLifecycle } from "openclaw/plugin-sdk/channel-outbound";
 import { resolveStateDir } from "openclaw/plugin-sdk/state-paths";
 import type { ResolvedOpenMailAccount } from "./accounts.js";
 import { parseAddress, type DispatchOutcome, type OpenMailMessageReceived } from "./inbound.js";
@@ -23,7 +22,6 @@ const MEMORY_RETRY_DELAYS_MS = [2_000, 10_000, 30_000];
 
 export type Dispatch = (
   event: OpenMailMessageReceived,
-  lifecycle?: ChannelIngressMonitorLifecycle,
 ) => Promise<DispatchOutcome>;
 
 export type Ingress = {
@@ -116,11 +114,10 @@ function createDurableIngress(params: {
         : undefined,
     deliver: async (event, lifecycle) => {
       try {
-        const outcome = await dispatch(event, lifecycle);
+        const outcome = await dispatch(event);
         if (outcome.kind === "dropped") {
           ctx.log?.info?.(`openmail: drop event ${event.event_id}: ${outcome.reason}`);
         }
-        // Idempotent when inbound.run already adopted through the bound lifecycle.
         await lifecycle.onAdopted();
         return { kind: "completed" };
       } catch (error) {

@@ -13,11 +13,9 @@ import { normalizeOptionalString } from "openclaw/plugin-sdk/string-coerce-runti
 
 export const OPENMAIL_CHANNEL_ID = "openmail" as const;
 export const DEFAULT_BASE_URL = "https://api.openmail.sh";
-/** Aggregate size of inbound attachments staged for the agent per message. */
-export const DEFAULT_MEDIA_MAX_MB = 20;
 
 /**
- *  channel  inbound mail wakes the agent, it replies in-thread (default)
+ *  channel  isolated replies to the sender, or a main-chat alert (default)
  *  notify   a new-mail alert appears in your main chat
  *  tool     nothing inbound; the agent only uses email when you ask (CLI skill)
  */
@@ -40,7 +38,7 @@ export type OpenMailAccountConfig = {
   podId?: string;
   baseUrl?: string;
   mode?: OpenMailMode;
-  /** Aggregate cap for inbound attachments handed to the agent. 0 disables staging. */
+  /** Accepted for compatibility with configurations predating isolated replies. */
   mediaMaxMb?: number;
   /** Pod accounts: override the mode for individual inboxes. */
   inboxes?: Record<string, OpenMailInboxConfig>;
@@ -62,7 +60,6 @@ export type ResolvedOpenMailAccount = {
   podId: string | null;
   baseUrl: string;
   mode: OpenMailMode;
-  mediaMaxMb: number;
   /** Normalised per-inbox overrides; address keys are lowercased. */
   inboxes: Record<string, OpenMailInboxConfig>;
 };
@@ -141,11 +138,6 @@ export function resolveOpenMailAccount(params: {
   const scope: OpenMailScope =
     ownInbox ? "inbox" : ownPod ? "pod" : inboxId ? "inbox" : podId ? "pod" : "inbox";
   const baseUrl = (normalizeOptionalString(merged.baseUrl) ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
-  const mediaMaxMb =
-    typeof merged.mediaMaxMb === "number" && Number.isFinite(merged.mediaMaxMb) && merged.mediaMaxMb >= 0
-      ? merged.mediaMaxMb
-      : DEFAULT_MEDIA_MAX_MB;
-
   return {
     accountId,
     name: normalizeOptionalString(merged.name),
@@ -158,7 +150,6 @@ export function resolveOpenMailAccount(params: {
     podId: scope === "pod" ? podId : null,
     baseUrl,
     mode: normalizeMode(merged.mode) ?? "channel",
-    mediaMaxMb,
     inboxes: Object.fromEntries(
       Object.entries(merged.inboxes ?? {}).map(([k, v]) => [k.includes("@") ? k.trim().toLowerCase() : k, v]),
     ),

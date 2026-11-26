@@ -9,9 +9,7 @@ metadata: {"openclaw":{"emoji":"📬","requires":{"bins":["openclaw"]}}}
 This agent has a real email address. How inbound mail reaches you depends on
 the channel's `mode`:
 
-- In `channel` mode (the default), mail from a person starts a turn with the
-  sender. Your answer goes back by email. Automated mail, newsletters and
-  bounces trigger a new-mail alert.
+- In `channel` mode (the default), an isolated responder can answer personal mail using only the current message. The reply goes to the sender. You get a new-mail alert for mail that needs your attention, including automated mail and newsletters.
 - In `notify` mode, incoming mail triggers a new-mail alert.
 - In `tool` mode, check the inbox with `threads list` when the user asks you
   to wait for or look for mail.
@@ -37,7 +35,7 @@ Several accounts are configured? Add `--account <id>` before the `--`.
 
 ## Pod accounts: many inboxes, one key
 
-If inbound mail shows an `Inbox:` line, this account covers a whole pod.
+For an account that covers a whole pod, use the inbox ID from the thread.
 Pass `--inbox-id` on `send`, `threads list` and `messages list` so the right
 inbox is used; replies must go from the inbox that received the mail.
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveInboxMode, type ResolvedOpenMailAccount } from "./accounts.js";
-import { buildAgentText, parseAddress } from "./inbound.js";
+import { buildReplyInput, parseAddress } from "./inbound.js";
 
 function account(over: Partial<ResolvedOpenMailAccount> = {}): ResolvedOpenMailAccount {
   return {
@@ -14,8 +14,7 @@ function account(over: Partial<ResolvedOpenMailAccount> = {}): ResolvedOpenMailA
     podId: null,
     baseUrl: "https://api.openmail.sh",
     mode: "channel",
-    mediaMaxMb: 20,
-    inboxes: {},
+      inboxes: {},
     ...over,
   };
 }
@@ -31,63 +30,23 @@ describe("parseAddress", () => {
   });
 });
 
-describe("buildAgentText", () => {
-  const base = {
-    from: "ada@example.com",
-    to: "agent@omail.sh",
-    subject: "Invoice",
-    threadId: "t1",
-    messageId: "m1",
-    body: "Please see attached.",
-  };
-
-  it("inlines server-extracted attachment text", () => {
-    const text = buildAgentText({
-      ...base,
-      attachments: [{ filename: "inv.pdf", parsedText: "Amount due: 100" }],
-      staged: { paths: [], types: [], skipped: [] },
-    });
-    expect(text).toContain("Attachments: inv.pdf");
-    expect(text).toContain("--- inv.pdf (extracted text) ---\nAmount due: 100");
-    expect(text).not.toContain("attachments text --message-id");
+describe("buildReplyInput", () => {
+  const message = { id: "message-id", threadId: "thread-id", fromAddr: "ada@example.com", bodyText: "Please review." };
+  it("passes extracted text and names as external content without file handles", () => {
+    const input = buildReplyInput({ ...message, attachments: [
+      { id: "private-file-id", filename: "report.pdf", parsedText: "The total is 100.", url: "private-url" },
+    ] });
+    expect(input).toContain("EXTERNAL_UNTRUSTED_CONTENT");
+    expect(input).toContain("Attachment: report.pdf\nThe total is 100.");
+    expect(input).not.toMatch(/private-|message-id|thread-id/);
   });
 
-  it("can still read a legacy attachment by filename", () => {
-    const text = buildAgentText({
-      ...base,
-      attachments: [{ filename: "Ada's photo.jpg" }],
-      staged: { paths: [], types: [], skipped: ["Ada's photo.jpg"] },
-    });
-    expect(text).toContain("attachments text --message-id 'm1' --filename 'Ada'\\''s photo.jpg'");
-    expect(text).toContain("skipped, over the media size limit: Ada's photo.jpg");
-  });
-
-  it("identifies duplicate names in extracted text and in commands for unstaged files", () => {
-    const text = buildAgentText({
-      ...base,
-      accountId: "sales",
-      attachments: [
-        { id: "first", filename: "report.pdf", parsedText: "first report" },
-        { id: "second", filename: "report.pdf" },
-        { id: "third", filename: "report.pdf" },
-      ],
-      staged: { paths: ["/cache/second.pdf"], types: ["application/pdf"], skipped: ["report.pdf [id=third]"] },
-    });
-    expect(text).toContain("Message: m1");
-    expect(text).toContain("Attachments: report.pdf [id=first], report.pdf [id=second], report.pdf [id=third]");
-    expect(text).toContain("--- report.pdf [id=first] (extracted text) ---\nfirst report");
-    expect(text).toContain("openclaw openmail --account 'sales' -- attachments text --message-id 'm1' --attachment-id 'third'");
-    expect(text).not.toContain("--filename");
-  });
-
-  it("truncates long extracted text", () => {
-    const text = buildAgentText({
-      ...base,
-      attachments: [{ filename: "big.txt", parsedText: "x".repeat(50_000) }],
-      staged: { paths: [], types: [], skipped: [] },
-    });
-    expect(text).toContain("(extracted text, truncated)");
-    expect(text.length).toBeLessThan(10_000);
+  it.each([
+    [{ filename: "photo.png" }],
+    [{ filename: "report.txt", parsedText: "x".repeat(8001) }],
+    Array.from({ length: 4 }, () => ({ filename: "report.txt", parsedText: "x".repeat(7000) })),
+  ].map(attachments => ({ attachments })))("requires complete extracted text within budget", ({ attachments }) => {
+    expect(buildReplyInput({ ...message, attachments })).toBeUndefined();
   });
 });
 

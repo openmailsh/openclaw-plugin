@@ -37,10 +37,6 @@ export type OpenMailAttachment = {
   parsedText?: string | null;
 };
 
-export function attachmentLabel(att: OpenMailAttachment): string {
-  return att.id ? `${att.filename} [id=${att.id}]` : att.filename;
-}
-
 export type OpenMailMessage = {
   id: string;
   threadId: string;
@@ -78,16 +74,6 @@ export class OpenMailApiError extends Error {
     readonly body: unknown,
   ) {
     super(message);
-  }
-}
-
-export class AttachmentTooLargeError extends Error {
-  constructor(
-    readonly filename: string,
-    readonly bytes: number,
-    readonly maxBytes: number,
-  ) {
-    super(`Attachment ${filename} (${bytes} bytes) exceeds the ${maxBytes} byte media budget`);
   }
 }
 
@@ -221,45 +207,13 @@ export class OpenMailApi {
     }
   }
 
-  /** Raw attachment bytes; `maxBytes` aborts the download once exceeded. */
-  async downloadAttachment(
-    messageId: string,
-    filename: string,
-    maxBytes: number,
-    attachmentId?: string | null,
-  ): Promise<{ buffer: Buffer; contentType: string | undefined }> {
-    const selector = attachmentId || filename;
-    const response = await fetch(
-      `${this.baseUrl}/v1/attachments/${encodeURIComponent(messageId)}/${encodeURIComponent(selector)}`,
-      { headers: { ...CLIENT_HEADERS, Authorization: `Bearer ${this.apiKey}` } },
-    );
-    if (!response.ok) {
-      throw new OpenMailApiError(
-        `OpenMail API ${response.status}: attachment download failed`,
-        response.status,
-        await response.text().catch(() => ""),
-      );
-    }
-    const declared = Number(response.headers.get("content-length") ?? 0);
-    if (declared > maxBytes) throw new AttachmentTooLargeError(filename, declared, maxBytes);
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    const reader = response.body?.getReader();
-    if (!reader) return { buffer: Buffer.alloc(0), contentType: undefined };
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel().catch(() => undefined);
-        throw new AttachmentTooLargeError(filename, total, maxBytes);
-      }
-      chunks.push(value);
-    }
-    return {
-      buffer: Buffer.concat(chunks),
-      contentType: response.headers.get("content-type")?.split(";")[0].trim() || undefined,
-    };
+  async replyToSender(inboxId: string, messageId: string, body: string): Promise<SendResult> {
+    return (await this.request(
+      "POST",
+      `/v1/inboxes/${encodeURIComponent(inboxId)}/messages/${encodeURIComponent(messageId)}/reply`,
+      { body },
+      { "Idempotency-Key": `openclaw-reply:${messageId}` },
+    )) as SendResult;
   }
 
   /**

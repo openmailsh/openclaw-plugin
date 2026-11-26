@@ -44,7 +44,7 @@ export const openmailChannelConfigSchema = buildChannelConfigSchema(
       baseUrl: { label: "API base URL", advanced: true },
       mode: {
         label: "Mode",
-            help: "channel (default): mail from people wakes the agent and it replies in-thread; automated mail is only announced. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask.",
+        help: "Channel (default) replies to the sender using the current email or alerts you. Notify alerts you about incoming mail. Tool checks mail when you ask.",
       },
       inboxes: {
         label: "Per-inbox overrides",
@@ -52,8 +52,8 @@ export const openmailChannelConfigSchema = buildChannelConfigSchema(
         advanced: true,
       },
       mediaMaxMb: {
-        label: "Attachment budget (MB)",
-        help: "Total size of inbound attachments handed to the agent as files per email. 0 disables.",
+        label: "Legacy attachment budget (MB)",
+        help: "Kept for compatibility with older configurations. Automatic replies use extracted text.",
         advanced: true,
       },
     },

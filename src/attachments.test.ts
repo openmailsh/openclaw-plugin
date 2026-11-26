@@ -3,12 +3,10 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
 import { promisify } from "node:util";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { buildCliEnv, resolveBundledCliPath } from "./cli.js";
-import { stageInboundAttachments } from "./media.js";
-import { OpenMailApi } from "./openmail-api.js";
 
 describe("same-named message attachments", () => {
   const attachments = [{ id: "second", filename: "report.txt" }, { id: "first", filename: "report.txt" }];
@@ -46,26 +44,6 @@ describe("same-named message attachments", () => {
     vi.unstubAllEnvs();
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(stateDir, { recursive: true, force: true });
-  });
-
-  it("stages distinct files under their original names and handles ID-less messages", async () => {
-    const api = new OpenMailApi(baseUrl, "om_test");
-    const [listed] = await api.listThreadMessages("thread");
-    expect(listed.attachments).toEqual(attachments);
-    const staged = await stageInboundAttachments({
-      api,
-      messageId: listed.id,
-      attachments: [
-        ...listed.attachments!,
-        { filename: "old report.txt" }, { id: "large", filename: "report.txt", sizeBytes: 2048 },
-      ],
-      maxBytes: 1024,
-    });
-    expect(await Promise.all(staged.paths.map((p) => readFile(p, "utf8"))))
-      .toEqual(["second report", "first report", "legacy report"]);
-    expect(staged.paths[0]).not.toBe(staged.paths[1]);
-    for (const path of staged.paths.slice(0, 2)) expect(basename(path)).toContain("report");
-    expect(staged.skipped).toEqual(["report.txt [id=large]"]);
   });
 
   it("lists attachment IDs and uses them for text and raw downloads with the bundled CLI", async () => {
