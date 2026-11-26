@@ -35,7 +35,7 @@ type OpenMailSetupInput = ChannelSetupInput & {
 
 function describeMode(mode: OpenMailMode, where: string): string {
   if (mode === "notify") {
-    return `Mode: notify. New mail at ${where} is summarised to you on your main chat; the agent does not reply by itself.`;
+    return `In notify mode, new mail at ${where} triggers an alert in your main chat. Ask to read the email or reply.`;
   }
   if (mode === "tool") return `Mode: tool. Nothing inbound wakes the agent; it uses ${where} only when you ask.`;
   return `Mode: channel. Mail to ${where} wakes the agent and it replies in the same thread.`;
