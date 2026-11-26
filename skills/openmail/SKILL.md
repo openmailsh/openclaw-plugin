@@ -70,12 +70,12 @@ existing one.
 ## Sending new mail
 
 ```bash
-openclaw openmail -- send --to "person@example.com" --subject "Subject" --body "Body."
+openclaw openmail -- send --to "alex@example.com" --to "sam@example.com" --subject "Review" --body "Can you both review the proposal?"
 openclaw openmail -- send --to "person@example.com" --subject "Report" --body "<p>See attached.</p>" --attach ./report.pdf
 openclaw openmail -- send --to "person@example.com" --cc "boss@example.com" --bcc "crm@example.com" --subject "Subject" --body "Body."
 ```
 
-`--body` is plain text or HTML (detected). `--attach <path>` is repeatable.
+Repeat `--to` for each visible recipient. `--body` accepts plain text or HTML. Repeat `--attach` for each file.
 `--cc` and `--bcc` are repeatable too; `--bcc` recipients are hidden from
 everyone else, so use it for silent copies such as a CRM logging address.
 The response has `messageId` and `threadId`; keep `threadId` to continue later.
@@ -101,7 +101,7 @@ only required field, so you can save a partial message for review.
 
 ```bash
 openclaw openmail -- inbox list --json
-openclaw openmail -- drafts create --inbox-id "<inbox-id>" --to "person@example.com" --subject "Proposal" --body-html "<p>Please review.</p>" --json
+openclaw openmail -- drafts create --inbox-id "<inbox-id>" --to "alex@example.com" --to "sam@example.com" --subject "Proposal" --body-html "<p>Please review.</p>" --json
 openclaw openmail -- drafts list --json
 openclaw openmail -- drafts list --inbox-id "<inbox-id>" --pod-id "<pod-id>" --query Proposal --json
 openclaw openmail -- drafts get --draft-id "<draft-id>" --json
@@ -125,7 +125,7 @@ openclaw openmail -- drafts create --inbox-id "<inbox-id>" --source-thread-id "<
 openclaw openmail -- drafts list --source-thread-id "<thread-id>" --json
 ```
 
-`--cc`, `--bcc`, and `--attach` are repeatable. Both draft creation and editing accept only `--body-html` for body content.
+Repeat `--to`, `--cc`, or `--bcc` for each address. On edit, the addresses replace the saved list for that field. Repeat `--attach` for each file. Both draft creation and editing accept only `--body-html` for body content.
 The API generates plain text automatically; do not use `--body`. OpenMail imports supported embedded or remote images in the HTML and
 stores them with the draft. On creation, for a local inline image, pass
 `--inline-image "inline-<UUID>@openmail=./photo.png"` and use the same content ID

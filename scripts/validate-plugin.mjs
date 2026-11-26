@@ -85,6 +85,11 @@ if (!/\d+\.\d+\.\d+/.test(version)) fail("bundled CLI did not print a version", 
 
 // Exercise the installed CLI through the real host, not only mocked spawn calls.
 // An older bundled CLI can forward arguments successfully yet lack these commands.
+const sendHelp = step("bundled CLI supports repeated To recipients", () =>
+  run(["openmail", "--account", "validate", "--", "help", "send"]),
+);
+if (!/^\s*--to\s+<email>.*repeat/im.test(sendHelp)) fail("bundled CLI does not expose repeatable --to", sendHelp);
+
 const draftHelp = step("bundled CLI exposes draft editing and deletion", () =>
   run(["openmail", "--account", "validate", "--", "help", "drafts"]),
 );

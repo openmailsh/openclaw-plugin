@@ -135,6 +135,7 @@ it with the channel's credentials:
 openclaw openmail -- threads get --thread-id <id> --json
 openclaw openmail -- attachments text --message-id "<message-id>" --attachment-id "<attachment-id>"
 openclaw openmail --account sales -- send --to a@b.com --thread-id <id> --body "..."
+openclaw openmail -- send --to alex@example.com --to sam@example.com --subject "Review" --body "Can you both review the proposal?"
 ```
 
 Credentials come from the channel config only. `--api-key`, `--base-url` and
