@@ -99,6 +99,8 @@ for (const action of ["edit", "delete"]) {
   }
 }
 
+if (!/^\s+send --draft-id[^\n]*--send-at\b/m.test(draftHelp)) fail("bundled CLI cannot schedule a draft", draftHelp);
+
 const attachmentHelp = step("bundled CLI exposes attachment IDs", () =>
   run(["openmail", "--account", "validate", "--", "help", "attachments"]),
 );

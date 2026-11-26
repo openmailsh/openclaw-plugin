@@ -156,6 +156,8 @@ its saved content and attachments.
 openclaw openmail -- drafts send --draft-id "<draft-id>" --updated-at "<reviewed updatedAt>" --json
 ```
 
+To schedule the reviewed draft, add `--send-at <iso-8601>` to `drafts send`. Include the timezone and choose a time 30 seconds to 30 days ahead. On acceptance the draft leaves Drafts. Report the scheduled time and keep the returned `id` to reschedule or cancel it.
+
 A successful send removes the draft. Handle other outcomes as follows.
 
 - If you receive `draft_changed`, get the draft again and review the current version with the user before sending.
