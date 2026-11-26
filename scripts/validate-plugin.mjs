@@ -108,6 +108,13 @@ for (const action of ["text", "get"]) {
   }
 }
 
+const folderHelp = step("bundled CLI exposes folder browsing", () =>
+  run(["openmail", "--account", "validate", "--", "help", "folders"]),
+);
+if (!/^\s+list\b/m.test(folderHelp) || !/^\s+messages --folder-id\b/m.test(folderHelp)) {
+  fail("bundled CLI is missing a folder command", folderHelp);
+}
+
 const skills = step("list eligible skills", () => run(["skills", "list", "--eligible"]));
 if (!/\bopenmail\b/.test(skills)) fail("openmail skill is not eligible", skills);
 
