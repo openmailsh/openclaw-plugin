@@ -137,6 +137,20 @@ describe("dispatchOpenMailMessage re-authorization", () => {
 });
 
 describe("dispatchOpenMailMessage notify mode", () => {
+  it.each([
+    { fields: { toRecipients: ["sam@example.com", "alex@example.com"] }, expected: "To: sam@example.com, alex@example.com" },
+    { fields: { toRecipients: [], headerTo: "hidden@example.com" }, expected: undefined },
+    { fields: { headerTo: "review@example.com", deliveryRole: "cc" }, expected: "To: review@example.com" },
+    { fields: { deliveryRole: "cc" }, expected: undefined },
+    { fields: {}, expected: "To: agent@omail.sh" },
+  ])("displays the visible To header for $fields", async ({ fields, expected }) => {
+    const { ctx, api } = harness({ ...apiMessage, ...fields }, { mode: "notify" });
+    const notifyRuntime = { enqueueSystemEvent: vi.fn(() => true), requestHeartbeat: vi.fn() };
+    await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
+    const [text] = notifyRuntime.enqueueSystemEvent.mock.calls[0] as [string];
+    expect(text.split("\n").find(line => line.startsWith("To: "))).toBe(expected);
+  });
+
   it("wakes the main session instead of starting a reply turn", async () => {
     const { ctx, api, run } = harness(apiMessage, { mode: "notify" });
     const notifyRuntime = { enqueueSystemEvent: vi.fn(() => true), requestHeartbeat: vi.fn() };

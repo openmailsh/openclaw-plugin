@@ -48,6 +48,9 @@ export type OpenMailMessage = {
   direction?: "inbound" | "outbound";
   fromAddr?: string | null;
   toAddr?: string | null;
+  toRecipients?: string[];
+  headerTo?: string | null;
+  deliveryRole?: string | null;
   subject?: string | null;
   bodyText?: string | null;
   attachments?: OpenMailAttachment[];

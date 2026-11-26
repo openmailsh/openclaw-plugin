@@ -283,10 +283,12 @@ export async function dispatchOpenMailMessage(params: {
   const replyTo = `openmail:${sender.address}`;
   const body = message.bodyText ?? event.message.body_text ?? "";
   const subject = message.subject ?? event.message.subject ?? null;
+  const legacyTo = message.deliveryRole === "cc" ? null : message.toAddr ?? event.message.to;
+  const visibleTo = message.toRecipients?.join(", ") ?? message.headerTo ?? legacyTo;
   const agentText = (mode: "channel" | "notify") =>
     buildAgentText({
       from: authoritativeFrom,
-      to: message.toAddr ?? event.message.to,
+      to: visibleTo,
       subject,
       threadId,
       messageId: message.id,
