@@ -72,26 +72,43 @@ describe("provisionOpenMailAccount", () => {
 });
 
 describe("setup --mode", () => {
-  const apply = (input: Record<string, unknown>, cfg: Record<string, unknown> = {}) =>
-    setupAdapter.applyAccountConfig({
-      cfg: cfg as never,
-      accountId: "default",
-      input: input as never,
+  const apply = (input: Record<string, unknown>, cfg: Record<string, unknown> = {}, accountId = "default") =>
+    setupAdapter.applyAccountConfig({ cfg, accountId, input: input as never });
+
+  it.each([{}, { mode: "shout" }])("persists notify on new setup with %j", (input) => {
+    const cfg = apply({ apiKey: "k", inboxId: "i", ...input });
+    expect(cfg.channels?.openmail).toMatchObject({ mode: "notify" });
+  });
+
+  it.each(["channel", "notify", "tool"])("honors an explicit %s and keeps it on re-authentication", (mode) => {
+    const before = apply({ apiKey: "k", inboxId: "i", mode });
+    const cfg = apply({ apiKey: "replacement" }, before);
+    expect(resolveOpenMailAccount({ cfg })).toMatchObject({ mode, apiKey: "replacement" });
+  });
+
+  it("keeps inherited modes and per-inbox overrides when re-authenticating a legacy pod", () => {
+    const pod = { podId: "p", inboxes: { i: { mode: "channel" } } };
+    const cfg = apply({ apiKey: "replacement" }, {
+      channels: { openmail: { mode: "tool", accounts: { sales: pod }, apiKey: "k" } },
+    }, "sales");
+    expect(cfg.channels?.openmail?.accounts?.sales).not.toHaveProperty("mode");
+    expect(resolveOpenMailAccount({ cfg, accountId: "sales" })).toMatchObject({ mode: "tool", inboxes: pod.inboxes });
+  });
+
+  it("adds a notify account beside a legacy root without adopting its mode", () => {
+    const cfg = apply({ apiKey: "k2", pod: "p" }, {
+      channels: { openmail: { apiKey: "k", inboxId: "i", mode: "channel" } },
+    }, "team");
+    expect(resolveOpenMailAccount({ cfg, accountId: "team" }).mode).toBe("notify");
+    expect(resolveOpenMailAccount({ cfg, accountId: "default" }).mode).toBe("channel");
+  });
+
+  it("adds a default inbox without changing the inherited mode of existing named accounts", () => {
+    const cfg = apply({ apiKey: "k", inboxId: "i" }, {
+      channels: { openmail: { accounts: { sales: { apiKey: "s", inboxId: "sales" } } } },
     });
-
-  it("defaults to channel when not given", () => {
-    const cfg = apply({ apiKey: "k", inboxId: "i" });
-    expect(resolveOpenMailAccount({ cfg, accountId: "default" }).mode).toBe("channel");
-  });
-
-  it("stores notify / tool when chosen", () => {
-    const cfg = apply({ apiKey: "k", inboxId: "i", mode: "notify" });
     expect(resolveOpenMailAccount({ cfg, accountId: "default" }).mode).toBe("notify");
-  });
-
-  it("ignores an unknown mode instead of writing it", () => {
-    const cfg = apply({ apiKey: "k", inboxId: "i", mode: "shout" });
-    expect(resolveOpenMailAccount({ cfg, accountId: "default" }).mode).toBe("channel");
+    expect(resolveOpenMailAccount({ cfg, accountId: "sales" }).mode).toBe("channel");
   });
 });
 

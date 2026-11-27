@@ -2,7 +2,7 @@
   "id": "openmail",
   "name": "OpenMail",
   "description": "OpenMail channel plugin for OpenClaw: give your agent an email address.",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "activation": {
     "onStartup": false
   },
@@ -12,7 +12,7 @@
   "channelConfigs": {
     "openmail": {
       "label": "OpenMail",
-      "description": "Email for agents. Inbound mail wakes the agent; replies go out in the same thread.",
+      "description": "New OpenMail accounts alert you when mail arrives. Choose channel mode for automatic in-thread replies.",
       "schema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
@@ -142,8 +142,8 @@
           "mode": {
             "type": "string",
             "enum": [
-              "channel",
               "notify",
+              "channel",
               "tool"
             ]
           },
@@ -164,8 +164,8 @@
                 "mode": {
                   "type": "string",
                   "enum": [
-                    "channel",
                     "notify",
+                    "channel",
                     "tool"
                   ]
                 }
@@ -306,8 +306,8 @@
                 "mode": {
                   "type": "string",
                   "enum": [
-                    "channel",
                     "notify",
+                    "channel",
                     "tool"
                   ]
                 },
@@ -328,8 +328,8 @@
                       "mode": {
                         "type": "string",
                         "enum": [
-                          "channel",
                           "notify",
+                          "channel",
                           "tool"
                         ]
                       }
@@ -367,7 +367,7 @@
         },
         "mode": {
           "label": "Mode",
-          "help": "channel (default): mail from people wakes the agent and it replies in-thread; automated mail is only announced. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask."
+          "help": "notify (new accounts) alerts you in your main chat. In channel mode the agent processes incoming mail and attachments with its configured tools and emails replies to the sender without your review. In tool mode the agent checks mail only when asked."
         },
         "inboxes": {
           "label": "Per-inbox overrides",

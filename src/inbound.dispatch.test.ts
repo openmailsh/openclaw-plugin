@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { ChannelGatewayContext } from "openclaw/plugin-sdk/channel-contract";
-import type { ResolvedOpenMailAccount } from "./accounts.js";
+import { resolveOpenMailAccount, type ResolvedOpenMailAccount } from "./accounts.js";
 import { dispatchOpenMailMessage, type OpenMailMessageReceived } from "./inbound.js";
+import { setupAdapter } from "./setup.js";
 import { stageInboundAttachments } from "./media.js";
 import type { OpenMailApi, OpenMailMessage } from "./openmail-api.js";
 
@@ -141,6 +142,23 @@ describe("dispatchOpenMailMessage re-authorization", () => {
 });
 
 describe("dispatchOpenMailMessage channel replies", () => {
+  it("delivers an in-thread reply after a legacy account re-authenticates without choosing a mode", async () => {
+    const cfg = setupAdapter.applyAccountConfig({
+      cfg: { channels: { openmail: { apiKey: "old", inboxId: "inb_1" } } },
+      accountId: "default", input: { apiKey: "replacement" },
+    });
+    const { ctx, api, run } = harness(
+      { ...apiMessage, category: "personal", autoReplyable: true },
+      resolveOpenMailAccount({ cfg }),
+    );
+    await dispatchOpenMailMessage({ ctx, event, api });
+    const turn = await run.mock.results[0].value as { delivery: { deliver(payload: { text: string }): Promise<unknown> } };
+    await turn.delivery.deliver({ text: "Thanks, Ada" });
+    expect(api.sendReply).toHaveBeenCalledExactlyOnceWith({
+      inboxId: "inb_1", to: "ada@example.com", threadId: "thr_1", body: "Thanks, Ada",
+    });
+  });
+
   it.each([
     { fields: { toRecipients: ["sam@example.com", "alex@example.com"] }, expected: "To: sam@example.com, alex@example.com" },
     { fields: { toRecipients: [], headerTo: "hidden@example.com" }, expected: undefined },
@@ -156,6 +174,23 @@ describe("dispatchOpenMailMessage channel replies", () => {
 });
 
 describe("dispatchOpenMailMessage notifications", () => {
+  it("sends only an arrival notice for personal mail after new account setup", async () => {
+    const cfg = setupAdapter.applyAccountConfig({
+      cfg: {}, accountId: "default", input: { apiKey: "k", inboxId: "inb_1" },
+    });
+    const { ctx, api, run } = harness(
+      { ...apiMessage, category: "personal", autoReplyable: true, threadId: apiThreadId },
+      resolveOpenMailAccount({ cfg }),
+    );
+    const notifyRuntime = { enqueueSystemEvent: vi.fn(() => true), requestHeartbeat: vi.fn() };
+    await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
+    expect(notifyRuntime.enqueueSystemEvent).toHaveBeenCalledExactlyOnceWith(
+      `${mailNotice}\nAccount: default\nThread: ${apiThreadId}`, expect.anything(),
+    );
+    expect(run).not.toHaveBeenCalled();
+    expect(api.sendReply).not.toHaveBeenCalled();
+  });
+
   it.each(["notify", "channel"] as const)("queues only an arrival notice and reference in %s mode", async (mode) => {
     const { ctx, api, run } = harness({
       ...apiMessage,

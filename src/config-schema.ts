@@ -4,7 +4,7 @@ import {
 } from "openclaw/plugin-sdk/channel-config-schema";
 import { buildSecretInputSchema } from "openclaw/plugin-sdk/secret-input";
 import { z } from "zod";
-import { OPENMAIL_MODES } from "./accounts.js";
+import { OPENMAIL_MODES, OPENMAIL_MODE_HELP } from "./accounts.js";
 
 // Literal string or SecretRef object; the host materialises refs before we read them.
 const SecretInputSchema = buildSecretInputSchema();
@@ -44,7 +44,7 @@ export const openmailChannelConfigSchema = buildChannelConfigSchema(
       baseUrl: { label: "API base URL", advanced: true },
       mode: {
         label: "Mode",
-            help: "channel (default): mail from people wakes the agent and it replies in-thread; automated mail is only announced. notify: the agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound; email only when you ask.",
+        help: OPENMAIL_MODE_HELP,
       },
       inboxes: {
         label: "Per-inbox overrides",
