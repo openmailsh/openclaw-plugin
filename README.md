@@ -2,11 +2,9 @@
 
 An email address for your [OpenClaw](https://openclaw.ai) agent.
 
-Mail to `sales@omail.sh` reaches the agent as a conversation with the sender,
-and whatever it writes back goes out in the same thread. Notifications and
-newsletters are announced rather than answered. The agent can also read
-attachments, start new threads, and create more inboxes, all through the
-gateway you already run.
+New accounts alert you in your main chat when email arrives. Ask the agent to
+read the thread, open an attachment, or reply. To have a dedicated agent
+answer eligible mail automatically, choose `--mode channel` during setup.
 
 ## Install
 
@@ -32,7 +30,7 @@ Reinstalling after an uninstall? OpenClaw keeps the plugin disabled; run
 | `--mailbox-name sales` | creates `sales@omail.sh`; `--display-name "Sales bot"` sets the sender name |
 | `--inbox-id <id>` | uses that inbox; needed when the key can see several |
 | `--pod <id\|name>` | one account for a whole pod, see [Several inboxes](#several-inboxes) |
-| `--mode notify` / `--mode tool` | how inbound mail reaches the agent, see [Modes](#modes) |
+| `--mode notify\|channel\|tool` | how inbound mail reaches the agent, see [Modes](#modes) |
 
 ## Several inboxes
 
@@ -84,14 +82,20 @@ Set per account with `--mode` or `channels.openmail.mode`.
 
 | Mode | Inbound mail | Who replies |
 | --- | --- | --- |
-| `channel` (default) | wakes the agent as a conversation with the sender | the agent, in-thread |
-| `notify` | a new-mail alert in your usual chat (WhatsApp, Telegram…) | the agent, when you ask |
+| `notify` (new accounts) | a new-mail alert in your usual chat (WhatsApp, Telegram…) | the agent, when you ask |
+| `channel` | eligible mail starts a conversation with the sender | the agent, automatically in-thread |
 | `tool` | ignored; no websocket | nobody unless you ask; email is a skill the agent has |
 
-`channel` is for an inbox that *is* the agent (support@, sales@). Use `notify`
-for your own inbox. The alert tells you that mail arrived. Ask “What does it
-say?” for the sender and message details. In `tool` mode, the agent can poll the
-inbox for a task like “sign up for X and tell me the code.”
+**Upgrading to 0.1.13.** Setup saves `notify` for new accounts. Existing accounts
+keep their effective mode through upgrades and re-authentication. If you write
+config by hand, set the mode explicitly. A missing mode still inherits the
+channel setting or falls back to `channel` for compatibility.
+
+In `channel` mode, the selected agent processes incoming mail and attachments
+with its configured tools and emails its reply to the sender without your
+review. Untrusted content can influence what the agent reads or discloses.
+For automatic replies, use a dedicated agent with an inbox-scoped key and
+only the tools it needs. In `tool` mode, the agent can check mail when asked.
 
 ### Only people get an automatic reply
 
@@ -174,7 +178,7 @@ To browse Archive or a custom folder, list the folders in the inbox and use the 
     "openmail": {
       "apiKey": "om_…",          // inbox-scoped, or a SecretRef (below)
       "inboxId": "…",            // or "podId" for a whole pod
-      "mode": "channel",         // "notify" | "tool"; pod accounts may override per inbox (above)
+      "mode": "notify",          // "channel" | "tool"; pod accounts may override per inbox (above)
       "mediaMaxMb": 20,
       "accounts": {
         "sales": {

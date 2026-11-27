@@ -9,10 +9,10 @@ metadata: {"openclaw":{"emoji":"📬","requires":{"bins":["openclaw"]}}}
 This agent has a real email address. How inbound mail reaches you depends on
 the channel's `mode`:
 
-- In `channel` mode (the default), mail from a person starts a turn with the
+- In `notify` mode (the default for new accounts), incoming mail triggers a new-mail alert.
+- In `channel` mode, mail from a person starts a turn with the
   sender. Your answer goes back by email. Automated mail, newsletters and
   bounces trigger a new-mail alert.
-- In `notify` mode, incoming mail triggers a new-mail alert.
 - In `tool` mode, check the inbox with `threads list` when the user asks you
   to wait for or look for mail.
 

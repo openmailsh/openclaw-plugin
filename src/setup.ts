@@ -8,16 +8,20 @@ import {
   createPatchedAccountSetupAdapter,
   formatDocsLink,
   setSetupChannelEnabled,
+  patchScopedAccountConfig,
   type ChannelSetupInput,
 } from "openclaw/plugin-sdk/setup";
 import { normalizeOptionalString } from "openclaw/plugin-sdk/string-coerce-runtime";
 import { OpenMailApi, type OpenMailInbox } from "./openmail-api.js";
 import {
   listOpenMailAccountIds,
+  normalizeMode,
   OPENMAIL_CHANNEL_ID,
   resolveDefaultOpenMailAccountId,
   resolveOpenMailAccount,
   OPENMAIL_MODES,
+  OPENMAIL_MODE_HELP,
+  type OpenMailAccountConfig,
   type OpenMailMode,
   type ResolvedOpenMailAccount,
 } from "./accounts.js";
@@ -38,7 +42,7 @@ function describeMode(mode: OpenMailMode, where: string): string {
     return `In notify mode, new mail at ${where} triggers an alert in your main chat. Ask to read the email or reply.`;
   }
   if (mode === "tool") return `Mode: tool. Nothing inbound wakes the agent; it uses ${where} only when you ask.`;
-  return `Mode: channel. Mail to ${where} wakes the agent and it replies in the same thread.`;
+  return `Mode: channel. The agent processes mail to ${where} and its attachments with its configured tools, then emails its reply to the sender without your review.`;
 }
 
 function describeSenders(where: string): string {
@@ -78,7 +82,6 @@ const baseSetupAdapter = createPatchedAccountSetupAdapter({
       patch.podId = undefined;
     }
     if (baseUrl) patch.baseUrl = baseUrl;
-    if (i.mode && OPENMAIL_MODES.includes(i.mode)) patch.mode = i.mode;
     return patch;
   },
 });
@@ -216,8 +219,38 @@ function ownInboxId(cfg: OpenClawConfig, accountId: string): string | undefined 
   return normalizeOptionalString(section.accounts?.[accountId]?.inboxId);
 }
 
+// Return a mode to write only for an explicit choice or a newly added account.
+// Existing accounts may inherit their mode, including the legacy channel fallback.
+function setupModePatch(cfg: OpenClawConfig, accountId: string, requestedMode: unknown): OpenMailMode | undefined {
+  const explicit = normalizeMode(requestedMode);
+  if (explicit) return explicit;
+  const section = cfg.channels?.[OPENMAIL_CHANNEL_ID] as OpenMailAccountConfig | undefined;
+  const entry = section?.accounts?.[accountId];
+  if (entry || accountId === DEFAULT_ACCOUNT_ID) {
+    if (entry?.mode || (accountId === DEFAULT_ACCOUNT_ID && section?.mode)) return undefined;
+    if ((entry?.apiKey ?? section?.apiKey) && (entry?.inboxId || entry?.podId || section?.inboxId || section?.podId)) {
+      return undefined;
+    }
+  }
+  return "notify";
+}
+
 export const setupAdapter: typeof baseSetupAdapter = {
   ...baseSetupAdapter,
+  applyAccountConfig: (params) => {
+    const { cfg, accountId, input } = params;
+    const mode = setupModePatch(cfg, accountId, input.mode);
+    const next = baseSetupAdapter.applyAccountConfig(params);
+    if (!mode) return next;
+    // In multi-account configs a root mode would also change sibling accounts.
+    const section = cfg.channels?.[OPENMAIL_CHANNEL_ID] as OpenMailAccountConfig | undefined;
+    return patchScopedAccountConfig({
+      cfg: next, channelKey: OPENMAIL_CHANNEL_ID, accountId, patch: { mode },
+      scopeDefaultToAccounts: Boolean(Object.keys(section?.accounts ?? {}).length),
+      ensureAccountEnabled: false,
+      ensureChannelEnabled: false,
+    });
+  },
   // Runs before the config write, so what lands in openclaw.json is the
   // resolved inbox id and (when we could mint one) an inbox-scoped key.
   prepareAccountConfigInput: async ({ cfg, accountId, input, runtime }) => {
@@ -228,7 +261,7 @@ export const setupAdapter: typeof baseSetupAdapter = {
 
     const baseUrl = normalizeOptionalString(i.baseUrl) ?? current.baseUrl;
     const api = new OpenMailApi(baseUrl, apiKey);
-    const mode: OpenMailMode = i.mode && OPENMAIL_MODES.includes(i.mode) ? i.mode : current.mode;
+    const mode = setupModePatch(cfg, accountId, i.mode) ?? current.mode;
 
     const pod = normalizeOptionalString(i.pod) ?? (current.scope === "pod" ? current.podId ?? undefined : undefined);
     if (pod) {
@@ -309,8 +342,7 @@ export const openmailSetupContract = defineChannelSetupContract({
       choices: OPENMAIL_MODES,
       cli: {
         flags: "--mode <mode>",
-        description:
-          "channel (default): mail wakes the agent, it replies in-thread. notify: agent tells you about new mail on your main chat, no auto-reply. tool: nothing inbound, email only when asked.",
+        description: OPENMAIL_MODE_HELP,
       },
     },
     baseUrl: {
@@ -384,7 +416,7 @@ export const openmailSetupPlugin: ChannelPlugin<ResolvedOpenMailAccount> = {
     completionNote: {
       title: "OpenMail next steps",
       lines: [
-        "Restart the Gateway. channel mode: email the inbox, the agent replies in-thread. notify mode: the agent tells you about new mail on your usual chat. Change with --mode.",
+        "Restart the Gateway. New accounts alert you when mail arrives. To enable automatic email replies, choose --mode channel.",
         `Docs: ${formatDocsLink("/channels/openmail", "channels/openmail")}`,
       ],
     },

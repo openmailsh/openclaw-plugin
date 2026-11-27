@@ -30,7 +30,7 @@ const manifest = {
   channelConfigs: {
     openmail: {
       label: OPENMAIL_META.label,
-      description: "Email for agents. Inbound mail wakes the agent; replies go out in the same thread.",
+      description: "New OpenMail accounts alert you when mail arrives. Choose channel mode for automatic in-thread replies.",
       schema: openmailChannelConfigSchema.schema,
       uiHints: openmailChannelConfigSchema.uiHints,
     },

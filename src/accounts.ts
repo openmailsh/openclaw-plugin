@@ -17,11 +17,13 @@ export const DEFAULT_BASE_URL = "https://api.openmail.sh";
 export const DEFAULT_MEDIA_MAX_MB = 20;
 
 /**
- *  channel  inbound mail wakes the agent, it replies in-thread (default)
- *  notify   a new-mail alert appears in your main chat
+ *  channel  inbound mail wakes the agent, it replies in-thread
+ *  notify   a new-mail alert appears in your main chat (new account setup default)
  *  tool     nothing inbound; the agent only uses email when you ask (CLI skill)
  */
-export const OPENMAIL_MODES = ["channel", "notify", "tool"] as const;
+export const OPENMAIL_MODES = ["notify", "channel", "tool"] as const;
+export const OPENMAIL_MODE_HELP =
+  "notify (new accounts) alerts you in your main chat. In channel mode the agent processes incoming mail and attachments with its configured tools and emails replies to the sender without your review. In tool mode the agent checks mail only when asked.";
 export type OpenMailMode = (typeof OPENMAIL_MODES)[number];
 
 /** Per-inbox overrides inside a pod account. Keyed by inbox address or id. */
@@ -68,7 +70,7 @@ export type ResolvedOpenMailAccount = {
 };
 
 
-function normalizeMode(value: unknown): OpenMailMode | undefined {
+export function normalizeMode(value: unknown): OpenMailMode | undefined {
   return OPENMAIL_MODES.includes(value as OpenMailMode) ? (value as OpenMailMode) : undefined;
 }
 
@@ -157,6 +159,7 @@ export function resolveOpenMailAccount(params: {
     inboxId: scope === "inbox" ? inboxId : null,
     podId: scope === "pod" ? podId : null,
     baseUrl,
+    // Configs written before setup persisted a mode relied on automatic replies.
     mode: normalizeMode(merged.mode) ?? "channel",
     mediaMaxMb,
     inboxes: Object.fromEntries(
