@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@openmail/cli':
-        specifier: ^0.13.0
-        version: 0.13.0
+        specifier: ^0.13.1
+        version: 0.13.1
       ws:
         specifier: ^8.18.0
         version: 8.21.3
@@ -472,8 +472,8 @@ packages:
     peerDependencies:
       undici: '>=8.5.0 <9'
 
-  '@openmail/cli@0.13.0':
-    resolution: {integrity: sha512-mW6bgCd9q9s2/LBCii4Tbvk4BEuWcCY9d4Fy4BGILUafPO3WRmnHzX/8TwO9ze6S3BAeLA4fThQQYQEn4XgnmQ==}
+  '@openmail/cli@0.13.1':
+    resolution: {integrity: sha512-HMIrefqBHJQtUQQnO8T3fkqowPfA3ghm2qCir0UQX2Ed5MsdRbjeNbFR2ivcyxMe82HBFpmmePqyQPFRY35g2g==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -2458,7 +2458,7 @@ snapshots:
     dependencies:
       undici: 8.10.2
 
-  '@openmail/cli@0.13.0':
+  '@openmail/cli@0.13.1':
     dependencies:
       '@clack/prompts': 1.7.0
       undici: 7.30.0
