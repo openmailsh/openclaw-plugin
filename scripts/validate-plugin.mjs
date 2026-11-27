@@ -117,6 +117,14 @@ if (!/^\s+list\b/m.test(folderHelp) || !/^\s+messages --folder-id\b/m.test(folde
   fail("bundled CLI is missing a folder command", folderHelp);
 }
 
+if (/\b0\.14\./.test(version)) {
+  for (const action of ["create", "rename", "delete", "move", "restore"]) {
+    if (!new RegExp('^\\s+' + action + '\\s+--', "m").test(folderHelp)) {
+      fail("bundled CLI is missing folders " + action, folderHelp);
+    }
+  }
+}
+
 const skills = step("list eligible skills", () => run(["skills", "list", "--eligible"]));
 if (!/\bopenmail\b/.test(skills)) fail("openmail skill is not eligible", skills);
 

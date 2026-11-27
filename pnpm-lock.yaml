@@ -9,7 +9,7 @@ importers:
   .:
     dependencies:
       '@openmail/cli':
-        specifier: ^0.13.1
+        specifier: ^0.13.1 || ^0.14.0
         version: 0.13.1
       ws:
         specifier: ^8.18.0
