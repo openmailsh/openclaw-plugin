@@ -18,16 +18,3 @@ describe("OpenMailApi client attribution", () => {
     expect(init.headers.Authorization).toBe("Bearer om_test");
   });
 });
-
-it("addresses automatic replies by source message and reuses the key on retry", async () => {
-  const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => new Response("{}"));
-  vi.stubGlobal("fetch", fetchMock);
-  const api = new OpenMailApi("https://api.openmail.sh", "test");
-  await api.replyToSender("inbox", "message", "Hello");
-  await api.replyToSender("inbox", "message", "Hello again");
-  for (const [url, init] of fetchMock.mock.calls) {
-    expect(url).toBe("https://api.openmail.sh/v1/inboxes/inbox/messages/message/reply");
-    expect(init.headers).toMatchObject({ "Idempotency-Key": "openclaw-reply:message" });
-    expect(Object.keys(JSON.parse(init.body as string))).toEqual(["body"]);
-  }
-});

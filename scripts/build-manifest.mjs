@@ -30,7 +30,7 @@ const manifest = {
   channelConfigs: {
     openmail: {
       label: OPENMAIL_META.label,
-      description: "Automatic replies use the current email and go only to its sender. Mail that needs your attention triggers a new-mail alert.",
+      description: "Automatic replies use the current email. Mail that needs your attention triggers a new-mail alert.",
       schema: openmailChannelConfigSchema.schema,
       uiHints: openmailChannelConfigSchema.uiHints,
     },

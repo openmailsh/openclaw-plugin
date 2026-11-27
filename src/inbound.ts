@@ -6,7 +6,6 @@ import { buildAgentMainSessionKey } from "openclaw/plugin-sdk/routing";
 import { z } from "zod";
 import { OPENMAIL_CHANNEL_ID, resolveInboxMode, type ResolvedOpenMailAccount } from "./accounts.js";
 import {
-  OpenMailApiError,
   OpenMailApi,
   type OpenMailCategory,
   type OpenMailMessage,
@@ -236,14 +235,9 @@ export async function dispatchOpenMailMessage(params: {
   const body = input ? await generateReply(ctx, route.agentId, input) : null;
   ctx.abortSignal?.throwIfAborted();
   if (body) {
-    try {
-      await api.replyToSender(inboxId, message.id, body);
-      ctx.setStatus({ ...ctx.getStatus(), accountId: ctx.accountId, lastOutboundAt: Date.now() });
-      return { kind: "dispatched" };
-    } catch (error) {
-      // Older servers lack the sender-only endpoint. Never retry via a group reply.
-      if (!(error instanceof OpenMailApiError && error.status === 404)) throw error;
-    }
+    await api.sendReply({ inboxId, to: sender.address, threadId: message.threadId, body });
+    ctx.setStatus({ ...ctx.getStatus(), accountId: ctx.accountId, lastOutboundAt: Date.now() });
+    return { kind: "dispatched" };
   }
 
   const system = params.notifyRuntime ?? getOpenMailRuntime().system;

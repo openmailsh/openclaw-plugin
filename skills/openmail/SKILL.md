@@ -9,7 +9,7 @@ metadata: {"openclaw":{"emoji":"📬","requires":{"bins":["openclaw"]}}}
 This agent has a real email address. How inbound mail reaches you depends on
 the channel's `mode`:
 
-- In `channel` mode (the default), an isolated responder can answer personal mail using only the current message. The reply goes to the sender. You get a new-mail alert for mail that needs your attention, including automated mail and newsletters.
+- In `channel` mode (the default), an isolated responder can answer personal mail using only the current message. You get a new-mail alert for mail that needs your attention, including automated mail and newsletters.
 - In `notify` mode, incoming mail triggers a new-mail alert.
 - In `tool` mode, check the inbox with `threads list` when the user asks you
   to wait for or look for mail.
