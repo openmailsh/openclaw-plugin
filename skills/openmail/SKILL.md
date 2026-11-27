@@ -175,6 +175,7 @@ openclaw openmail -- threads list --is-read false --json    # unread threads
 openclaw openmail -- threads get --thread-id "<id>" --json  # full thread, oldest first
 openclaw openmail -- threads read --thread-id "<id>"        # mark handled
 openclaw openmail -- messages list --direction inbound --limit 20 --json
+openclaw openmail -- messages search --query "invoice acme" --json
 ```
 
 Messages carry `id`, `threadId`, `fromAddr`, `subject`, `bodyText` (use
