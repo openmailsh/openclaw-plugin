@@ -86,7 +86,7 @@ Set per account with `--mode` or `channels.openmail.mode`.
 | `channel` | eligible mail starts a conversation with the sender | the agent, automatically in-thread |
 | `tool` | ignored; no websocket | nobody unless you ask; email is a skill the agent has |
 
-**Upgrading to 0.1.13.** Setup saves `notify` for new accounts. Existing accounts
+**Upgrading to 0.1.16.** Setup saves `notify` for new accounts. Existing accounts
 keep their effective mode through upgrades and re-authentication. If you write
 config by hand, set the mode explicitly. A missing mode still inherits the
 channel setting or falls back to `channel` for compatibility.

@@ -85,6 +85,10 @@ The response has `messageId` and `threadId`; keep `threadId` to continue later.
 If a send is rejected by an outbound policy rule, tell the user; do not work
 around it.
 
+For scheduled delivery, add `--send-at <iso-8601>` to the send or reply command. Use the returned ID with `openclaw openmail -- scheduled reschedule --send-id <id> --send-at <iso-8601>` or `openclaw openmail -- scheduled cancel --send-id <id>`. To see queued mail, run `openclaw openmail -- scheduled list` in the same inbox.
+
+Each inbox starts at 10 sends per minute and 200 recipients per day. To, Cc and Bcc all count toward the daily limit, including on replies. Pro and Enterprise limits grow with inbox age and sending volume to 30 sends per minute and 2,000 recipients per day. [Rate limits](https://docs.openmail.sh/concepts/rate-limits) covers reputation throttling and Enterprise overrides.
+
 ## Drafts
 
 To discard a draft when requested, read it with `openclaw openmail -- drafts get --draft-id "<draft-id>" --json`, then use:
@@ -184,6 +188,8 @@ List the folders in the requested inbox. Choose the matching name or path and pa
 openclaw openmail -- folders list --inbox-id inb_xxx --json
 openclaw openmail -- folders messages --inbox-id inb_xxx --folder-id 42 --limit 20 --offset 0 --json
 ```
+
+When the bundled CLI is 0.14.0 or later, use `folders create --name <path>`, `folders rename --folder-id <id> --name <path>` and `folders delete --folder-id <id>` with the same `openclaw openmail --` prefix. Rename and delete include the folder’s descendants. Use `folders move --message-id <id> --folder-id <id>` to file a message. Use a pod or account key to move mail into or out of Trash, including `folders restore --message-id <id>`.
 
 The newest items appear first. In Drafts, use `kind` to tell saved drafts from messages. If `total` exceeds the number fetched, continue with the next offset.
 
