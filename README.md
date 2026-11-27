@@ -2,9 +2,8 @@
 
 An email address for your [OpenClaw](https://openclaw.ai) agent.
 
-New accounts alert you in your main chat when email arrives. Ask the agent to
-read the thread, open an attachment, or reply. To have a dedicated agent
-answer eligible mail automatically, choose `--mode channel` during setup.
+Your agent can read threads and attachments, send email, and manage inboxes
+through your OpenClaw gateway.
 
 ## Install
 

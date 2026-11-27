@@ -30,7 +30,7 @@ const manifest = {
   channelConfigs: {
     openmail: {
       label: OPENMAIL_META.label,
-      description: "New OpenMail accounts alert you when mail arrives. Choose channel mode for automatic in-thread replies.",
+      description: pkg.description,
       schema: openmailChannelConfigSchema.schema,
       uiHints: openmailChannelConfigSchema.uiHints,
     },
