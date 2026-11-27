@@ -12,7 +12,7 @@
   "channelConfigs": {
     "openmail": {
       "label": "OpenMail",
-      "description": "OpenMail channel plugin for OpenClaw: give your agent an email address.",
+      "description": "New OpenMail accounts alert you when mail arrives. Choose channel mode for automatic in-thread replies.",
       "schema": {
         "$schema": "http://json-schema.org/draft-07/schema#",
         "type": "object",
