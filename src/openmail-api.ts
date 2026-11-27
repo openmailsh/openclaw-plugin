@@ -207,6 +207,15 @@ export class OpenMailApi {
     }
   }
 
+  async replyToSender(inboxId: string, messageId: string, body: string): Promise<SendResult> {
+    return (await this.request(
+      "POST",
+      `/v1/inboxes/${encodeURIComponent(inboxId)}/messages/${encodeURIComponent(messageId)}/reply`,
+      { body },
+      { "Idempotency-Key": `openclaw-reply:${messageId}` },
+    )) as SendResult;
+  }
+
   /**
    * Reply in an existing thread. The API derives "Re: <subject>" from the
    * thread, so no subject is sent. `to` is the original sender.

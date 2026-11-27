@@ -2,7 +2,7 @@
 
 An email address for your [OpenClaw](https://openclaw.ai) agent.
 
-In channel mode, personal mail can receive an automatic reply in the same thread. The reply uses only the incoming email. When mail needs your attention, you get an alert in your usual chat.
+In channel mode, personal mail can receive an automatic reply in the same thread. The reply uses only the incoming email and goes only to its sender. When mail needs your attention, you get an alert in your usual chat.
 
 ## Install
 
@@ -79,7 +79,7 @@ Set per account with `--mode` or `channels.openmail.mode`.
 
 | Mode | Inbound mail | Who replies |
 | --- | --- | --- |
-| `channel` (default) | answers personal mail using only the current email, or alerts you | an isolated responder, in-thread |
+| `channel` (default) | answers personal mail using only the current email, or alerts you | an isolated responder, to the sender |
 | `notify` | a new-mail alert in your usual chat (WhatsApp, Telegram…) | the agent, when you ask |
 | `tool` | ignored; no websocket | nobody unless you ask; email is a skill the agent has |
 
@@ -141,7 +141,7 @@ To read an attachment yourself, find its message and attachment IDs in `threads 
 
 ## Behaviour
 
-- Automatic replies use normal OpenMail thread delivery, including its Cc and quoting rules.
+- Automatic replies go to the sender in the original thread, without copying other participants or quoting earlier messages.
 - New threads: `openclaw message send --channel openmail --to a@b.com "…"`
   (first line becomes the subject) or the CLI `send`. Outbound allow/block
   rules, if you want them, live in OpenMail (`openmail policy … --direction outbound`).

@@ -61,8 +61,8 @@ function harness(found: OpenMailMessage | null, overrides: Partial<ResolvedOpenM
   } as unknown as ChannelGatewayContext<ResolvedOpenMailAccount>;
   const api = {
     findMessage: vi.fn(async () => found),
-    sendReply: vi.fn(async () => ({ id: "out_1" })),
-  } as unknown as OpenMailApi & { findMessage: ReturnType<typeof vi.fn>; sendReply: ReturnType<typeof vi.fn> };
+    replyToSender: vi.fn(async () => ({ id: "out_1" })),
+  } as unknown as OpenMailApi & { findMessage: ReturnType<typeof vi.fn>; replyToSender: ReturnType<typeof vi.fn> };
   return { ctx, api, run, system };
 }
 
@@ -76,7 +76,7 @@ describe("dispatchOpenMailMessage re-authorization", () => {
       agentId: "main", message: expect.stringContaining("real@example.com"), extraSystemPrompt: expect.any(String), signal: undefined,
     });
     expect(run.mock.calls[0][0].message).not.toMatch(/frame subject|frame body|ada@example/);
-    expect(api.sendReply).toHaveBeenCalledExactlyOnceWith({ inboxId: "inb_1", to: "real@example.com", threadId: "thr_1", body: "Thanks." });
+    expect(api.replyToSender).toHaveBeenCalledExactlyOnceWith("inb_1", "msg_1", "Thanks.");
   });
 
   it("drops a frame whose (thread, message) pair OpenMail does not know", async () => {
@@ -143,7 +143,7 @@ describe("dispatchOpenMailMessage notifications", () => {
     const out = await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
     expect(out).toEqual({ kind: "dispatched" });
     expect(run).not.toHaveBeenCalled();
-    expect(api.sendReply).not.toHaveBeenCalled();
+    expect(api.replyToSender).not.toHaveBeenCalled();
     expect(notifyRuntime.enqueueSystemEvent).toHaveBeenCalledExactlyOnceWith(
       `${mailNotice}\nAccount: default\nThread: ${apiThreadId}`,
       { sessionKey: "agent:main:main", contextKey: "openmail:default:msg_1" },
@@ -198,7 +198,7 @@ describe("dispatchOpenMailMessage classification", () => {
     const out = await dispatchOpenMailMessage({ ctx, event, api, notifyRuntime });
     expect(out).toEqual({ kind: "dispatched" });
     expect(run).not.toHaveBeenCalled();
-    expect(api.sendReply).not.toHaveBeenCalled();
+    expect(api.replyToSender).not.toHaveBeenCalled();
     expect(notifyRuntime.enqueueSystemEvent).toHaveBeenCalledWith(mailNotice, expect.anything());
     expect(notifyRuntime.requestHeartbeat).toHaveBeenCalled();
   });
@@ -263,7 +263,7 @@ describe("dispatchOpenMailMessage pod scope", () => {
   it("replies from the inbox that received the mail and keys the conversation per inbox", async () => {
     const { ctx, api } = harness({ ...apiMessage, inboxId: "inb_7" }, podAccount);
     await dispatchOpenMailMessage({ ctx, event: { ...event, inbox_id: "inb_7" }, api });
-    expect(api.sendReply).toHaveBeenCalledExactlyOnceWith({ inboxId: "inb_7", to: "ada@example.com", threadId: "thr_1", body: "Thanks." });
+    expect(api.replyToSender).toHaveBeenCalledExactlyOnceWith("inb_7", "msg_1", "Thanks.");
     const routing = (ctx.channelRuntime as unknown as { routing: { resolveAgentRoute: ReturnType<typeof vi.fn> } })
       .routing.resolveAgentRoute;
     expect(routing.mock.calls[0][0]).toMatchObject({ peer: { id: "inb_7/ada@example.com" } });
@@ -325,7 +325,7 @@ describe("isolated reply fallback", () => {
       const { ctx, api, run, system } = harness(apiMessage);
       run.mockResolvedValue({ text });
       await dispatchOpenMailMessage({ ctx, event, api });
-      expect(api.sendReply).not.toHaveBeenCalled();
+      expect(api.replyToSender).not.toHaveBeenCalled();
       expect(system.enqueueSystemEvent).toHaveBeenCalledWith(mailNotice, expect.anything());
     },
   );
@@ -335,7 +335,7 @@ describe("isolated reply fallback", () => {
     run.mockRejectedValue(new Error("unavailable"));
     await dispatchOpenMailMessage({ ctx, event, api });
     expect(system.enqueueSystemEvent).toHaveBeenCalledTimes(1);
-    expect(api.sendReply).not.toHaveBeenCalled();
+    expect(api.replyToSender).not.toHaveBeenCalled();
   });
 
   it("announces mail with unreadable attachments without running the model", async () => {
@@ -345,10 +345,13 @@ describe("isolated reply fallback", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
-  it("propagates transient delivery failures for retry", async () => {
+  it("announces mail if the server lacks the sender-only operation and retries transient send failures", async () => {
     const { ctx, api, system } = harness(apiMessage);
-    api.sendReply.mockRejectedValueOnce(new OpenMailApiError("unavailable", 503, null));
+    api.replyToSender.mockRejectedValueOnce(new OpenMailApiError("missing", 404, null));
+    await dispatchOpenMailMessage({ ctx, event, api });
+    expect(system.enqueueSystemEvent).toHaveBeenCalledTimes(1);
+    api.replyToSender.mockRejectedValueOnce(new OpenMailApiError("unavailable", 503, null));
     await expect(dispatchOpenMailMessage({ ctx, event, api })).rejects.toThrow("unavailable");
-    expect(system.enqueueSystemEvent).not.toHaveBeenCalled();
+    expect(system.enqueueSystemEvent).toHaveBeenCalledTimes(1);
   });
 });

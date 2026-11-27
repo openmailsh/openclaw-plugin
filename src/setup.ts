@@ -384,7 +384,7 @@ export const openmailSetupPlugin: ChannelPlugin<ResolvedOpenMailAccount> = {
     completionNote: {
       title: "OpenMail next steps",
       lines: [
-        "Restart the Gateway. channel mode: email the inbox for an in-thread reply or an alert. notify mode: the agent tells you about new mail on your usual chat. Change with --mode.",
+        "Restart the Gateway. channel mode: email the inbox for a sender-only reply or an alert. notify mode: the agent tells you about new mail on your usual chat. Change with --mode.",
         `Docs: ${formatDocsLink("/channels/openmail", "channels/openmail")}`,
       ],
     },
